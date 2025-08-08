@@ -1,0 +1,73 @@
+import { createOpenAIClient } from './openai/client.js';
+import { createAnthropicClient } from './anthropic/client.js';
+import { createGoogleClient } from './google/client.js';
+import { createOllamaClient } from './ollama/client.js';
+import { createOpenRouterClient } from './openrouter/client.js';
+
+export const PROVIDERS = {
+  openai: {
+    name: 'OpenAI',
+    baseURL: 'https://api.openai.com/v1',
+    models: [
+      'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo',
+      // Hypothetical/future: gpt-5 (only show if user opts-in via env flag)
+    ],
+    defaultModel: 'gpt-4o-mini',
+    keyLabel: 'OpenAI API Key'
+  },
+  anthropic: {
+    name: 'Anthropic (Claude)',
+    baseURL: 'https://api.anthropic.com/v1',
+    models: [
+      'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229',
+      // High-end alias: opus-4.1 (alias to latest Opus if available)
+    ],
+    defaultModel: 'claude-3-5-sonnet-20241022',
+    keyLabel: 'Anthropic API Key'
+  },
+  google: {
+    name: 'Google (Gemini)',
+    baseURL: 'https://generativelanguage.googleapis.com/v1beta',
+    models: [
+      'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-1.0-pro'
+    ],
+    defaultModel: 'gemini-1.5-flash-latest',
+    keyLabel: 'Google AI API Key'
+  },
+  openrouter: {
+    name: 'OpenRouter (Multi-Provider)',
+    baseURL: 'https://openrouter.ai/api/v1',
+    models: [
+      'openai/gpt-4o', 'openai/gpt-4o-mini', 'openai/gpt-4-turbo', 'openai/gpt-4', 'openai/gpt-3.5-turbo',
+      'anthropic/claude-3-5-sonnet', 'anthropic/claude-3-opus', 'google/gemini-1.5-pro-latest'
+    ],
+    defaultModel: 'openai/gpt-4o-mini',
+    keyLabel: 'OpenRouter API Key'
+  },
+  ollama: {
+    name: 'Ollama (Local)',
+    baseURL: 'http://localhost:11434',
+    models: ['llama3.2', 'llama3.1', 'mistral', 'mixtral', 'codellama', 'deepseek-coder', 'custom'],
+    defaultModel: 'llama3.2',
+    keyLabel: 'Ollama Base URL'
+  }
+};
+
+export function getProviderClient(provider, apiKey) {
+  switch (provider) {
+    case 'openai':
+      return createOpenAIClient(apiKey, PROVIDERS.openai.baseURL);
+    case 'openrouter':
+      return createOpenRouterClient({ apiKey, baseURL: PROVIDERS.openrouter.baseURL });
+    case 'anthropic':
+      return createAnthropicClient(apiKey);
+    case 'google':
+      return createGoogleClient(apiKey);
+    case 'ollama':
+      return createOllamaClient(apiKey || PROVIDERS.ollama.baseURL);
+    default:
+      throw new Error(`Unsupported provider: ${provider}`);
+  }
+}
+
+
