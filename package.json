@@ -1,18 +1,30 @@
 {
-  "name": "pe2",
+  "name": "@kleosr/pe2-cli",
   "version": "3.4.5",
-  "description": "KleoSr PE2 CLI workspace",
+  "description": "🚀 KleoSr PE2-CLI: Convert raw prompts to PE2-optimized prompts using adaptive intelligence",
   "type": "module",
   "bin": {
-    "pe2-cli": "./src/cli.js"
+    "pe2-cli": "src/cli.js"
   },
   "scripts": {
     "start": "node ./src/cli.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "pe2",
+    "prompt-engineering",
+    "cli",
+    "ai",
+    "llm",
+    "prompt-optimization",
+    "kleosr"
+  ],
+  "author": "KleoSr <kleosr@proton.me>",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kleosr/PE2-CLI.git"
+  },
   "engines": {
     "node": ">=18.17.0"
   },
