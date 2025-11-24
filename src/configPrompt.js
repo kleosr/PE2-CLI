@@ -2,10 +2,29 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { PROVIDERS } from './providers/index.js';
 import { CONFIG_FILE, saveConfig } from './config.js';
+import { ThemeManager } from './utils.js';
+
+const themeManager = new ThemeManager();
+
+function handleExitPromptError(error) {
+  if (error instanceof Error && error.name === 'ExitPromptError') {
+    console.log(chalk.yellow('\n👋 Configuration cancelled.'));
+    return true;
+  }
+  return false;
+}
+
+process.on('uncaughtException', (error) => {
+  if (error instanceof Error && error.name === 'ExitPromptError') {
+    console.log(chalk.yellow('\n👋 Goodbye!'));
+    process.exit(0);
+  }
+  throw error;
+});
 
 export async function promptForConfig(rl) {
-  console.log(chalk.hex('#FFD93D')('\n🔧 Configuration Setup'));
-  console.log(chalk.hex('#B19CD9')("Let's configure your AI provider and API settings.\n"));
+  console.log(themeManager.color('warning')('\n🔧 Configuration Setup'));
+  console.log(themeManager.color('info')("Let's configure your AI provider and API settings.\n"));
 
   try {
     const { provider } = await inquirer.prompt([
@@ -44,7 +63,16 @@ export async function promptForConfig(rl) {
           name: 'apiKey',
           message: `Enter your ${providerConfig.keyLabel}:`,
           mask: '*',
-          validate: (input) => input.trim() ? true : 'API key is required'
+          validate: async (input) => {
+            const trimmed = input.trim();
+            if (!trimmed) {
+              return 'API key is required';
+            }
+            if (trimmed.length < 10) {
+              return 'API key seems too short. Please verify.';
+            }
+            return true;
+          }
         }
       ]);
       apiKey = resp.apiKey.trim();
@@ -73,7 +101,16 @@ export async function promptForConfig(rl) {
           type: 'input',
           name: 'customModel',
           message: 'Enter custom model name:',
-          validate: (input) => input.trim() ? true : 'Model name is required'
+          validate: async (input) => {
+            const trimmed = input.trim();
+            if (!trimmed) {
+              return 'Model name is required';
+            }
+            if (trimmed.length < 2) {
+              return 'Model name must be at least 2 characters';
+            }
+            return true;
+          }
         }
       ]);
       finalModel = customModel.trim();
@@ -82,22 +119,25 @@ export async function promptForConfig(rl) {
     const config = { provider, apiKey, model: finalModel };
 
     if (saveConfig(config)) {
-      console.log(chalk.hex('#50E3C2')(`\n✅ Configuration saved!`));
-      console.log(chalk.hex('#B19CD9')(`🌐 Provider: ${providerConfig.name}`));
-      console.log(chalk.hex('#B19CD9')(`📝 Model: ${config.model}`));
-      console.log(chalk.hex('#B19CD9')(`🔑 API Key: ${config.apiKey.substring(0, 8)}...`));
-      console.log(chalk.hex('#B19CD9')(`📁 Config saved to: ${CONFIG_FILE}\n`));
+      console.log(themeManager.color('success')(`\n✅ Configuration saved!`));
+      console.log(themeManager.color('info')(`🌐 Provider: ${providerConfig.name}`));
+      console.log(themeManager.color('info')(`📝 Model: ${config.model}`));
+      console.log(themeManager.color('info')(`🔑 API Key: ${config.apiKey.substring(0, 8)}...`));
+      console.log(themeManager.color('info')(`📁 Config saved to: ${CONFIG_FILE}\n`));
       return config;
     } else {
-      console.log(chalk.red('❌ Failed to save configuration.'));
+      console.log(themeManager.color('error')('❌ Failed to save configuration.'));
       return null;
     }
   } catch (error) {
+    if (handleExitPromptError(error)) {
+      return null;
+    }
     if (error.isTtyError) {
-      console.log(chalk.red('❌ Interactive prompts are not supported in this environment.'));
-      console.log(chalk.yellow('Please run this in a proper terminal.'));
+      console.log(themeManager.color('error')('❌ Interactive prompts are not supported in this environment.'));
+      console.log(themeManager.color('warning')('Please run this in a proper terminal.'));
     } else {
-      console.log(chalk.red(`❌ Configuration error: ${error.message}`));
+      console.log(themeManager.color('error')(`❌ Configuration error: ${error.message}`));
     }
     return null;
   }

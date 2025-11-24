@@ -1,35 +1,42 @@
+import {
+  COMPLEXITY_THRESHOLDS,
+  DIFFICULTY_LEVELS
+} from './constants.js';
+
+const TECH_INDICATORS = ['api', 'algorithm', 'framework', 'database', 'ml', 'ai', 'docker', 'python', 'javascript'];
+const DOMAIN_INDICATORS = ['compliance', 'strategy', 'analytics', 'finance', 'healthcare', 'enterprise'];
+const STRUCTURAL_PATTERN = /(\n\s*\d+\.|\n\s*\-|```|#)/g;
+const LOGIC_PATTERN = /\b(if|then|when|unless|until|depending|while)\b/g;
+const SPECIAL_CHARS_PATTERN = /[;\{\[]/g;
+
 export function analyzePromptComplexity(rawPrompt) {
   const words = rawPrompt.split(/\s+/).length;
   const promptLower = rawPrompt.toLowerCase();
   let score = 0;
 
-  score += words > 400 ? 4 : words > 250 ? 3 : words > 120 ? 2 : words > 60 ? 1 : 0;
+  const { wordCount, wordCountScores, maxTechIndicators, maxDomainIndicators, maxStructuralMatches, maxLogicMatches, specialCharsHigh, specialCharsMedium, specialCharsHighScore, specialCharsMediumScore } = COMPLEXITY_THRESHOLDS;
 
-  const techIndicators = ['api', 'algorithm', 'framework', 'database', 'ml', 'ai', 'docker', 'python', 'javascript'];
-  const domainIndicators = ['compliance', 'strategy', 'analytics', 'finance', 'healthcare', 'enterprise'];
-  score += Math.min(techIndicators.filter(kw => promptLower.includes(kw)).length, 4);
-  score += Math.min(domainIndicators.filter(kw => promptLower.includes(kw)).length, 3);
+  score += words > wordCount.veryHigh ? wordCountScores.veryHigh
+    : words > wordCount.high ? wordCountScores.high
+    : words > wordCount.medium ? wordCountScores.medium
+    : words > wordCount.low ? wordCountScores.low
+    : 0;
 
-  const structuralPattern = /(\n\s*\d+\.|\n\s*\-|```|#)/g;
-  const structuralMatches = (rawPrompt.match(structuralPattern) || []).length;
-  score += Math.min(structuralMatches, 4);
+  score += Math.min(TECH_INDICATORS.filter(keyword => promptLower.includes(keyword)).length, maxTechIndicators);
+  score += Math.min(DOMAIN_INDICATORS.filter(keyword => promptLower.includes(keyword)).length, maxDomainIndicators);
 
-  const logicPattern = /\b(if|then|when|unless|until|depending|while)\b/g;
-  const logicMatches = (promptLower.match(logicPattern) || []).length;
-  score += Math.min(logicMatches, 3);
+  const structuralMatches = (rawPrompt.match(STRUCTURAL_PATTERN) || []).length;
+  score += Math.min(structuralMatches, maxStructuralMatches);
 
-  const specialChars = (rawPrompt.match(/[;\{\[]/g) || []).length;
-  score += specialChars >= 5 ? 2 : specialChars >= 2 ? 1 : 0;
+  const logicMatches = (promptLower.match(LOGIC_PATTERN) || []).length;
+  score += Math.min(logicMatches, maxLogicMatches);
 
-  const difficultyMap = [
-    { max: 4, level: 'NOVICE', iterations: 1 },
-    { max: 8, level: 'INTERMEDIATE', iterations: 2 },
-    { max: 12, level: 'ADVANCED', iterations: 3 },
-    { max: 16, level: 'EXPERT', iterations: 4 },
-    { max: Infinity, level: 'MASTER', iterations: 5 }
-  ];
+  const specialChars = (rawPrompt.match(SPECIAL_CHARS_PATTERN) || []).length;
+  score += specialChars >= specialCharsHigh ? specialCharsHighScore
+    : specialChars >= specialCharsMedium ? specialCharsMediumScore
+    : 0;
 
-  const result = difficultyMap.find(d => score <= d.max);
+  const result = DIFFICULTY_LEVELS.find(difficulty => score <= difficulty.max);
   return { difficulty: result.level, iterations: result.iterations, score };
 }
 

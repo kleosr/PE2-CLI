@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import chalk from 'chalk';
+import { DEFAULT_CONFIG, FILE_PERMISSIONS } from './constants.js';
 
 export const CONFIG_DIR = path.join(os.homedir(), '.kleosr-pe2');
 export const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -29,8 +30,8 @@ export function loadConfig() {
 export function saveConfig(config) {
   ensureConfigDir();
   try {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 });
-    fs.chmodSync(CONFIG_FILE, 0o600);
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: FILE_PERMISSIONS.configFile });
+    fs.chmodSync(CONFIG_FILE, FILE_PERMISSIONS.configFile);
     return true;
   } catch (error) {
     console.log(chalk.red(`❌ Error saving config: ${error.message}`));
@@ -39,11 +40,7 @@ export function saveConfig(config) {
 }
 
 export function getDefaultConfig() {
-  return {
-    apiKey: null,
-    model: 'openai/gpt-4o-mini',
-    provider: 'openrouter'
-  };
+  return { ...DEFAULT_CONFIG };
 }
 
 export const PROVIDER_ENV_VARS = {

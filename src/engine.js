@@ -6,18 +6,19 @@ import { getInitialTemplate, getRefinementTemplate } from './templates.js';
 import { buildMessages } from './messages.js';
 import { analyzePromptComplexity } from './analysis.js';
 import { setTerminalTitle } from './ui.js';
+import { LLM_CONFIG, PROGRESS_PERCENTAGES, PERFORMANCE_METRICS, DEFAULT_EVALUATION, REQUIRED_PROMPT_FIELDS, HTTP_HEADERS } from './constants.js';
 
 const PROMPTS_DIR = path.join(process.cwd(), 'pe2-prompts');
 
 export async function generateInitialPrompt(client, rawPrompt, model) {
   try {
-    const systemContent = 'You are a precise prompt optimizer. Follow the instructions and return JSON only.';
+    const systemContent = LLM_CONFIG.systemMessage;
     const userContent = getInitialTemplate(rawPrompt);
     const response = await client.chat.completions.create({
       model,
       messages: buildMessages({ system: systemContent, user: userContent }),
-      max_tokens: 1024,
-      temperature: 0.3
+      max_tokens: LLM_CONFIG.maxTokens,
+      temperature: LLM_CONFIG.temperature
     });
     const content = response.choices[0].message.content;
     try {
@@ -30,8 +31,7 @@ export async function generateInitialPrompt(client, rawPrompt, model) {
         jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
         try {
           const parsed = JSON.parse(jsonStr);
-          const requiredFields = ['context', 'role', 'task', 'constraints', 'output'];
-          const hasAll = requiredFields.every(f => Object.prototype.hasOwnProperty.call(parsed, f));
+          const hasAll = REQUIRED_PROMPT_FIELDS.every(field => Object.prototype.hasOwnProperty.call(parsed, field));
           if (hasAll) return { prompt: parsed, edits: 'Initial prompt generation.' };
           return {
             prompt: {
@@ -67,14 +67,14 @@ export async function refinePrompt(client, currentPromptJson, refinementHistory,
   const cached = cache?.get(currentPromptJson, iterationNum);
   if (cached) return cached;
   try {
-    const systemContent = 'You are a precise prompt optimizer. Return JSON only.';
+    const systemContent = LLM_CONFIG.refinementSystemMessage;
     const userContent = getRefinementTemplate(currentPromptJson, iterationNum);
     const response = await client.chat.completions.create({
       model,
       messages: buildMessages({ system: systemContent, user: userContent }),
       headers: {
-        'HTTP-Referer': 'https://pe2-cli-tool.local',
-        'X-Title': 'KleoSr PE2-CLI Tool'
+        'HTTP-Referer': HTTP_HEADERS.referer,
+        'X-Title': HTTP_HEADERS.title
       }
     });
     const content = response.choices[0].message.content;
@@ -90,8 +90,7 @@ export async function refinePrompt(client, currentPromptJson, refinementHistory,
         let jsonStr = content.slice(firstBrace, lastBrace + 1);
         jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
         const parsed = JSON.parse(jsonStr);
-        const required = ['context', 'role', 'task', 'constraints', 'output'];
-        const hasAll = required.every(f => Object.prototype.hasOwnProperty.call(parsed, f));
+        const hasAll = REQUIRED_PROMPT_FIELDS.every(field => Object.prototype.hasOwnProperty.call(parsed, field));
         const prompt = hasAll
           ? parsed
           : {
@@ -145,10 +144,10 @@ export async function processPrompt({
     console.log();
 
     progressBar = createProgressBar();
-    progressBar.start(100, 0, { task: 'Initializing agentic processing...' });
+    progressBar.start(PROGRESS_PERCENTAGES.complete, PROGRESS_PERCENTAGES.initialization, { task: 'Initializing agentic processing...' });
 
     const refinementHistory = [];
-    if (progressBar) progressBar.update(30, { task: `Generating ${context.domain}-optimized PE² prompt...` });
+    if (progressBar) progressBar.update(PROGRESS_PERCENTAGES.initialPromptStart, { task: `Generating ${context.domain}-optimized PE² prompt...` });
     const { prompt: currentPrompt, edits: initialEdits } = await generateInitialPrompt(client, prompt, config.model);
     if (!currentPrompt) {
       if (progressBar) { progressBar.stop(); progressBar = null; }
@@ -157,16 +156,17 @@ export async function processPrompt({
     }
     refinementHistory.push({ iteration: 1, edits: initialEdits });
     let workingPrompt = currentPrompt;
-    if (progressBar) progressBar.update(50, { task: 'Initial prompt generated' });
+    if (progressBar) progressBar.update(PROGRESS_PERCENTAGES.initialPromptComplete, { task: 'Initial prompt generated' });
 
     const cache = {
       get: (k, i) => null,
       set: () => {}
     };
-    const progressPerIteration = 40 / recommendedIterations;
+    const progressRange = PROGRESS_PERCENTAGES.finalization - PROGRESS_PERCENTAGES.initialPromptComplete;
+    const progressPerIteration = progressRange / recommendedIterations;
     for (let i = 0; i < recommendedIterations; i++) {
       const iterationNum = i + 2;
-      if (progressBar) progressBar.update(50 + i * progressPerIteration, { task: `Adaptive refinement (${iterationNum}/${recommendedIterations + 1}) for ${context.domain}...` });
+      if (progressBar) progressBar.update(PROGRESS_PERCENTAGES.initialPromptComplete + i * progressPerIteration, { task: `Adaptive refinement (${iterationNum}/${recommendedIterations + 1}) for ${context.domain}...` });
       const currentPromptJson = JSON.stringify(workingPrompt, null, 2);
       const { prompt: refinedPrompt, edits } = await refinePrompt(client, currentPromptJson, refinementHistory, config.model, iterationNum, cache);
       if (!refinedPrompt) {
@@ -177,10 +177,10 @@ export async function processPrompt({
       refinementHistory.push({ iteration: iterationNum, edits });
     }
 
-    if (progressBar) progressBar.update(90, { task: 'Finalizing agentic output...' });
-    const evaluation = { overallScore: 8.0 };
+    if (progressBar) progressBar.update(PROGRESS_PERCENTAGES.finalization, { task: 'Finalizing agentic output...' });
+    const evaluation = DEFAULT_EVALUATION;
     const performanceMetrics = {
-      accuracy_gain: `Estimated ${20 + complexityScore * 3}% improvement`,
+      accuracy_gain: `Estimated ${PERFORMANCE_METRICS.accuracyGainBase + complexityScore * PERFORMANCE_METRICS.accuracyGainMultiplier}% improvement`,
       optimization_level: strategy.focus,
       quality_score: evaluation.overallScore.toFixed(1),
       iterations_applied: refinementHistory.length
@@ -196,7 +196,7 @@ export async function processPrompt({
     fs.writeFileSync(outputFile, finalOutput, 'utf-8');
     statsTracker.track(config.model, complexityScore, 0);
 
-    if (progressBar) { progressBar.update(100, { task: 'Complete!' }); progressBar.stop(); progressBar = null; }
+    if (progressBar) { progressBar.update(PROGRESS_PERCENTAGES.complete, { task: 'Complete!' }); progressBar.stop(); progressBar = null; }
     setTerminalTitle('KleoSr PE²-CLI - Interactive Mode');
     return { success: true, outputFile };
   } catch (error) {

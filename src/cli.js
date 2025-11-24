@@ -12,11 +12,12 @@ import { SessionManager, createProgressBar, displayStatusBar, COMMANDS, validate
 import { PROVIDERS, getProviderClient } from './providers/index.js';
 import { CONFIG_DIR, CONFIG_FILE, getDefaultConfig, loadConfig, saveConfig, resolveApiKey } from './config.js';
 import { analyzePromptComplexity } from './analysis.js';
-import { getInitialTemplate, getRefinementTemplate } from './templates.js';
-import { buildMessages } from './messages.js';
 import { promptForConfig } from './configPrompt.js';
-import { displayBanner, displayInteractiveBanner, formatApiKeyDisplay, formatContentPreview, formatProcessingPromptDisplay, displayComplexityAnalysis } from './ui.js';
-import { processPrompt as runEngine, generateInitialPrompt, refinePrompt } from './engine.js';
+import { displayBanner, displayInteractiveBanner, formatApiKeyDisplay, formatContentPreview, formatProcessingPromptDisplay, displayComplexityAnalysis, setTerminalTitle } from './ui.js';
+import { processPrompt as runEngine } from './engine.js';
+import { PROMPT_LIMITS, DEFAULT_CONTEXT, DEFAULT_STRATEGY, DEFAULT_EVALUATION, UI_CONFIG, PROGRESS_PERCENTAGES, PERFORMANCE_METRICS } from './constants.js';
+import { formatMarkdownOutput } from './templates.js';
+import { setupGlobalErrorHandlers, handleError, CLIError, ValidationError, ConfigError, ProviderError } from './errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,232 +27,46 @@ const themeManager = new ThemeManager();
 const statsTracker = new StatsTracker();
 const userPreferences = new UserPreferences();
 
+setupGlobalErrorHandlers();
+
 let lastResult = null;
 let isProcessingPrompt = false;
 const PROMPTS_DIR = path.join(process.cwd(), 'pe2-prompts');
 
 const promptCache = new Map();
-const MAX_CACHE_SIZE = 50;
-const getCacheKey = (prompt, iterations) => (prompt.substring(0, 100) + '_' + iterations).replace(/[^a-zA-Z0-9_]/g, '').substring(0, 50);
-const getCachedResult = (prompt, iterations) => promptCache.get(getCacheKey(prompt, iterations));
+
+function getCacheKey(prompt, iterations) {
+  return (prompt.substring(0, PROMPT_LIMITS.cacheKeyPrefixLength) + '_' + iterations)
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .substring(0, PROMPT_LIMITS.cacheKeyMaxLength);
+}
+
+function getCachedResult(prompt, iterations) {
+  return promptCache.get(getCacheKey(prompt, iterations));
+}
+
 function setCachedResult(prompt, iterations, result) {
-    const key = getCacheKey(prompt, iterations);
-  if (promptCache.size >= MAX_CACHE_SIZE) promptCache.delete(promptCache.keys().next().value);
+  const key = getCacheKey(prompt, iterations);
+  if (promptCache.size >= PROMPT_LIMITS.maxCacheSize) {
+    promptCache.delete(promptCache.keys().next().value);
+  }
   promptCache.set(key, { result, timestamp: Date.now(), hits: 0 });
 }
 
-// === BEGIN: Optimize by removing redundant stub classes ===
-// These stub classes add unnecessary overhead and complexity
-// Replace with simple constants and direct function calls
-
-const DEFAULT_CONTEXT = { domain: 'general', history: [], avgComplexity: 0 };
-const DEFAULT_STRATEGY = { iterations: 2, focus: 'optimization', adaptiveFeatures: [], template: '' };
-const DEFAULT_EVALUATION = { scores: {}, overallScore: 8.0 };
-
-// Simplified helper functions
 function getContext() {
-    return DEFAULT_CONTEXT;
+  return DEFAULT_CONTEXT;
 }
 
 function selectStrategy() {
-    return DEFAULT_STRATEGY;
+  return DEFAULT_STRATEGY;
 }
 
 async function evaluatePrompt() {
-    return DEFAULT_EVALUATION;
-}
-// === END: Optimize by removing redundant stub classes ===
-
-// UI helpers moved to ui.js
-
-// Provider model lists moved to providers/index.js
-
-function ensureConfigDir() {
-    if (!fs.existsSync(CONFIG_DIR)) {
-        fs.mkdirSync(CONFIG_DIR, { recursive: true });
-    }
+  return DEFAULT_EVALUATION;
 }
 
-function loadConfig() {
-    ensureConfigDir();
-    if (fs.existsSync(CONFIG_FILE)) {
-        try {
-            const configData = fs.readFileSync(CONFIG_FILE, 'utf-8');
-            return JSON.parse(configData);
-        } catch (error) {
-            console.log(chalk.yellow('Warning: Could not load config file, using defaults.'));
-            return {};
-        }
-    }
-    return {};
-}
 
-function saveConfig(config) {
-    ensureConfigDir();
-    try {
-        // Ensure sensitive data is stored with user-only permissions (0600)
-        fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 });
-        // In case file existed previously with broader permissions
-        fs.chmodSync(CONFIG_FILE, 0o600);
-        return true;
-    } catch (error) {
-        console.log(chalk.red(`❌ Error saving config: ${error.message}`));
-        return false;
-    }
-}
-
-function getDefaultConfig() {
-    return {
-        apiKey: null,
-        model: 'openai/gpt-4o-mini',
-        provider: 'openrouter'
-    };
-}
-
-// Banner helpers moved to ui.js
-
-// Difficulty indicators are exposed by ui/templates modules
-
-// Display complexity moved to ui.js
-
-// Client selection is centralized in providers/index.js
-
-function getProviderClient(provider, apiKey) {
-    switch (provider) {
-        case 'openai':
-            return createOpenAIClient(apiKey, PROVIDERS.openai.baseURL);
-        case 'openrouter':
-            return createOpenRouterClient({ apiKey, baseURL: PROVIDERS.openrouter.baseURL });
-        case 'anthropic':
-            return createAnthropicClient(apiKey);
-        case 'google':
-            return createGoogleClient(apiKey);
-        case 'ollama':
-            // For Ollama the apiKey parameter is actually the base URL; fall back to default if empty
-            return createOllamaClient(apiKey || PROVIDERS.ollama.baseURL);
-        default:
-            throw new Error(`Unsupported provider: ${provider}`);
-    }
-}
-
-async function promptForConfig(rl) {
-    console.log(chalk.hex('#FFD93D')('\n🔧 Configuration Setup'));
-    console.log(chalk.hex('#B19CD9')('Let\'s configure your AI provider and API settings.\n'));
-    
-    try {
-        // Provider selection
-        const { provider } = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'provider',
-                message: 'Select your AI provider:',
-                choices: [
-                    { name: `${PROVIDERS.openai.name} - Direct OpenAI API`, value: 'openai' },
-                    { name: `${PROVIDERS.anthropic.name} - Direct Anthropic API`, value: 'anthropic' },
-                    { name: `${PROVIDERS.google.name} - Direct Google AI API`, value: 'google' },
-                    { name: `${PROVIDERS.openrouter.name} - Access multiple providers`, value: 'openrouter' },
-                    { name: `${PROVIDERS.ollama.name} - Local Ollama`, value: 'ollama' }
-                ],
-                default: 'openrouter'
-            }
-        ]);
-
-        const providerConfig = PROVIDERS[provider];
-        
-        // === Provider-specific connection details ===
-        let apiKey = '';
-        if (provider === 'ollama') {
-            const { baseURL } = await inquirer.prompt([
-                {
-                    type: 'input',
-                    name: 'baseURL',
-                    message: 'Enter your Ollama base URL (press Enter for default):',
-                    default: providerConfig.baseURL
-                }
-            ]);
-            apiKey = baseURL.trim();
-        } else {
-            const resp = await inquirer.prompt([
-                {
-                    type: 'password',
-                    name: 'apiKey',
-                    message: `Enter your ${providerConfig.keyLabel}:`,
-                    mask: '*',
-                    validate: (input) => {
-                        if (!input.trim()) {
-                            return 'API key is required';
-                        }
-                        return true;
-                    }
-                }
-            ]);
-            apiKey = resp.apiKey.trim();
-        }
-    
-    // Model selection
-        const { model } = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'model',
-                message: 'Select a model:',
-                choices: [
-                    ...providerConfig.models.map(model => ({
-                        name: model === providerConfig.defaultModel ? `${model} (recommended)` : model,
-                        value: model
-                    })),
-                    { name: '📝 Enter Custom Model', value: 'custom' }
-                ],
-                default: providerConfig.defaultModel
-            }
-        ]);
-
-        let finalModel = model;
-        if (model === 'custom') {
-            const { customModel } = await inquirer.prompt([
-                {
-                    type: 'input',
-                    name: 'customModel',
-                    message: 'Enter custom model name:',
-                    validate: (input) => {
-                        if (!input.trim()) {
-                            return 'Model name is required';
-                        }
-                        return true;
-                    }
-                }
-            ]);
-            finalModel = customModel.trim();
-        }
-
-        const config = {
-            provider,
-            apiKey,
-            model: finalModel
-        };
-    
-    if (saveConfig(config)) {
-        console.log(chalk.hex('#50E3C2')(`\n✅ Configuration saved!`));
-            console.log(chalk.hex('#B19CD9')(`🌐 Provider: ${providerConfig.name}`));
-        console.log(chalk.hex('#B19CD9')(`📝 Model: ${config.model}`));
-        console.log(chalk.hex('#B19CD9')(`🔑 API Key: ${config.apiKey.substring(0, 8)}...`));
-        console.log(chalk.hex('#B19CD9')(`📁 Config saved to: ${CONFIG_FILE}\n`));
-            return config;
-    } else {
-        console.log(chalk.red('❌ Failed to save configuration.'));
-        return null;
-    }
-    } catch (error) {
-        if (error.isTtyError) {
-            console.log(chalk.red('❌ Interactive prompts are not supported in this environment.'));
-            console.log(chalk.yellow('Please run this in a proper terminal.'));
-        } else {
-            console.log(chalk.red(`❌ Configuration error: ${error.message}`));
-        }
-        return null;
-    }
-}
-
-// Message building is in messages.js
+// promptForConfig is imported from configPrompt.js
 
 // Optimized prompt generation with improved efficiency
 async function generateInitialPrompt(client, rawPrompt, model) {
@@ -450,100 +265,8 @@ async function refinePrompt(client, currentPromptJson, refinementHistory, model,
     }
 }
 
-function formatMarkdownOutput(pe2Prompt, history, metrics, difficulty, complexityScore) {
-    const indicator = DIFFICULTY_INDICATORS[difficulty];
-    
-    const markdown = `
-# PE²-Optimized Prompt ${indicator}
+// formatMarkdownOutput is imported from templates.js
 
-**Difficulty Level:** ${difficulty} | **Complexity Score:** ${complexityScore}/20 | **Generated:** ${new Date().toLocaleString()}
-
-## Agentic Analysis
-- **Domain Focus:** ${metrics.domain_focus || 'general'}
-- **Adaptive Features:** ${metrics.adaptive_features || 'standard'}
-- **Overall Quality:** ${metrics.overall_quality || 'N/A'}
-
-### Quality Scores
-${metrics.quality_scores ? Object.entries(metrics.quality_scores)
-    .map(([key, value]) => `- **${key.charAt(0).toUpperCase() + key.slice(1)}:** ${value.toFixed(1)}/10`)
-    .join('\n') : '- Not available'}
-
-## Context
-${pe2Prompt.context || 'N/A'}
-
-## Role
-${pe2Prompt.role || 'N/A'}
-
-## Task
-${pe2Prompt.task || 'N/A'}
-
-## Constraints
-${pe2Prompt.constraints || 'N/A'}
-
-## Output
-${pe2Prompt.output || 'N/A'}
-
----
-
-# Refinement History
-${history.map(item => `### Iteration ${item.iteration}\n- ${item.edits}\n`).join('\n')}
-
----
-
-# Performance Metrics
-- **Estimated Accuracy Gain**: ${metrics.accuracy_gain || 'N/A'}
-- **Complexity Analysis**: ${difficulty} level prompt with ${complexityScore}/20 complexity score
-- **Optimization Level**: ${history.length} iterations applied
-- **Generated by**: KleoSr PE²-CLI v3.1 (Agentic Edition)
-
----
-
-*Generated with ❤️ by KleoSr PE²-CLI - Adaptive Intelligence for Prompt Engineering*
-`;
-    return markdown;
-}
-
-// Improved API key display function
-function formatApiKeyDisplay(apiKey, showFullKey = false) {
-    if (!apiKey) return 'Not set';
-    if (showFullKey) return apiKey;
-    
-    const keyLength = apiKey.length;
-    if (keyLength <= 12) {
-        return apiKey.substring(0, 4) + '•'.repeat(Math.max(4, keyLength - 8)) + apiKey.substring(keyLength - 4);
-    }
-    return apiKey.substring(0, 8) + '•'.repeat(8) + apiKey.substring(keyLength - 4);
-}
-
-// Improved content preview function
-function formatContentPreview(content, maxLength = 200, showFullLength = false) {
-    if (!content) return '';
-    
-    if (content.length <= maxLength || showFullLength) {
-        return content;
-    }
-    
-    const truncated = content.substring(0, maxLength);
-    const lastSpace = truncated.lastIndexOf(' ');
-    const cleanTruncated = lastSpace > maxLength * 0.7 ? truncated.substring(0, lastSpace) : truncated;
-    
-    return `${cleanTruncated}... [${content.length - cleanTruncated.length} more characters]`;
-}
-
-// Improved prompt processing display
-function formatProcessingPromptDisplay(prompt, maxLength = 100) {
-    if (!prompt) return '';
-    
-    if (prompt.length <= maxLength) {
-        return prompt;
-    }
-    
-    const truncated = prompt.substring(0, maxLength);
-    const lastSpace = truncated.lastIndexOf(' ');
-    const cleanTruncated = lastSpace > maxLength * 0.7 ? truncated.substring(0, lastSpace) : truncated;
-    
-    return `${cleanTruncated}... [${prompt.length} chars total]`;
-}
 
 async function handleCommand(command, rl, config) {
     switch (command) {
@@ -557,8 +280,8 @@ async function handleCommand(command, rl, config) {
             setTerminalTitle('KleoSr PE2-CLI - Current Configuration');
             console.log('\n' + themeManager.color('info')('Current Configuration:'));
             
-            const configTerminalWidth = process.stdout.columns || 80;
-            const useMinimalConfig = configTerminalWidth < 70;
+            const configTerminalWidth = process.stdout.columns || UI_CONFIG.terminalWidth.default;
+            const useMinimalConfig = configTerminalWidth < UI_CONFIG.terminalWidth.compactThreshold;
             
             const configTable = createTable(
                 ['Setting', 'Value'],
@@ -688,7 +411,8 @@ async function handleCommand(command, rl, config) {
             try {
                 const content = fs.readFileSync(importPath, 'utf-8');
                 console.log(themeManager.color('success')('✓ File imported successfully'));
-                console.log(themeManager.color('info')(`📄 Content preview: ${formatContentPreview(content, 300)}`));
+                const previewLength = 300;
+                console.log(themeManager.color('info')(`📄 Content preview: ${formatContentPreview(content, previewLength)}`));
                 return content;
             } catch (error) {
                 console.log(themeManager.color('error')(`✗ Import failed: ${error.message}`));
@@ -706,8 +430,8 @@ async function handleCommand(command, rl, config) {
         case '/prefs':
             console.log('\n' + themeManager.color('info')('User Preferences:'));
             
-            const prefsTerminalWidth = process.stdout.columns || 80;
-            const useMinimalPrefs = prefsTerminalWidth < 70;
+            const prefsTerminalWidth = process.stdout.columns || UI_CONFIG.terminalWidth.default;
+            const useMinimalPrefs = prefsTerminalWidth < UI_CONFIG.terminalWidth.compactThreshold;
             
             const prefsTable = createTable(
                 ['Setting', 'Value'],
@@ -833,8 +557,8 @@ async function interactiveMode(initialInput = null, cliOptions = {}) {
         })();
         const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(rawPrompt);
         displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
-        console.log(themeManager.color('info')(`📝 Input: ${formatProcessingPromptDisplay(rawPrompt, 100)}`));
-        displayComplexityAnalysis(difficulty, recIter, compScore, rawPrompt);
+        console.log(themeManager.color('info')(`📝 Input: ${formatProcessingPromptDisplay(rawPrompt, PROMPT_LIMITS.processingDisplayMaxLength)}`));
+        displayComplexityAnalysis({ themeManager }, difficulty, recIter, compScore, rawPrompt);
         return;
     }
 
@@ -885,9 +609,16 @@ async function interactiveMode(initialInput = null, cliOptions = {}) {
     let client;
     try {
         const apiKeyInitial = resolveApiKey(config.provider, config.apiKey);
-        client = config.provider ? getProviderClient(config.provider, apiKeyInitial) : getOpenRouterClient(apiKeyInitial);
+        if (!apiKeyInitial && config.provider !== 'ollama') {
+            throw new ConfigError('API key is required. Please configure with /settings or set environment variable.');
+        }
+        client = getProviderClient(config.provider || 'openrouter', apiKeyInitial);
     } catch (error) {
-        console.log(themeManager.color('error')(`\n✗ Failed to initialize API client: ${error.message}`));
+        if (error instanceof ConfigError) {
+            console.log(themeManager.color('error')(`\n✗ ${error.message}`));
+        } else {
+            console.log(themeManager.color('error')(`\n✗ Failed to initialize API client: ${error.message}`));
+        }
         console.log(themeManager.color('muted')('Please check your configuration with /settings'));
         rl.close();
         return;
@@ -1035,7 +766,7 @@ async function interactiveMode(initialInput = null, cliOptions = {}) {
     });
 
     rl.on('close', () => {
-        console.log(chalk.hex('#50E3C2')('\n✨ Session ended. Have a great day!'));
+        console.log(themeManager.color('success')('\n✨ Session ended. Have a great day!'));
         process.exit(0);
     });
 }
@@ -1050,9 +781,7 @@ async function processPrompt(prompt, client, config, sessionId) {
         // Validate prompt
         const validationError = validatePrompt(prompt);
         if (validationError) {
-            console.log(themeManager.color('error')(`✗ ${validationError}`));
-            setTerminalTitle('KleoSr PE²-CLI - Interactive Mode');
-            return;
+            throw new ValidationError(validationError);
         }
 
         // Optimized context and strategy retrieval
@@ -1071,139 +800,43 @@ async function processPrompt(prompt, client, config, sessionId) {
         
         console.log(themeManager.color('info')('📊 Adaptive Analysis:'));
         console.log(`   Domain: ${context.domain}`);
+        const { DIFFICULTY_INDICATORS } = await import('./ui.js');
         console.log(`   Difficulty: ${DIFFICULTY_INDICATORS[difficulty]} ${difficulty}`);
-        console.log(`   Score: ${complexityScore}/20`);
+        const complexityScoreMax = PERFORMANCE_METRICS.complexityScoreMax;
+        console.log(`   Score: ${complexityScore}/${complexityScoreMax}`);
         console.log(`   Iterations: ${recommendedIterations} (adapted for ${context.domain})`);
         if (strategy.adaptiveFeatures.length > 0) {
             console.log(`   Features: ${strategy.adaptiveFeatures.join(', ')}`);
         }
         console.log();
         
-        // Create progress bar only for actual processing
-        progressBar = createProgressBar();
-        progressBar.start(100, 0, { task: 'Initializing agentic processing...' });
-            
-            const refinementHistory = [];
-            
-        // Initial Prompt Generation with context
-        if (progressBar) {
-            progressBar.update(30, { task: `Generating ${context.domain}-optimized PE² prompt...` });
-        }
-        const { prompt: currentPrompt, edits: initialEdits } = await generateInitialPrompt(client, prompt, config.model);
+        const result = await runEngine({
+            prompt,
+            client,
+            config,
+            sessionId,
+            themeManager,
+            statsTracker,
+            userPreferences,
+            getContext,
+            selectStrategy
+        });
         
-            if (!currentPrompt) {
-            if (progressBar) {
-                progressBar.stop();
-                progressBar = null;
-            }
-            console.log(themeManager.color('error')("✗ Failed to generate initial prompt."));
-                return;
-            }
-
-            refinementHistory.push({ iteration: 1, edits: initialEdits });
-            let workingPrompt = currentPrompt;
-        if (progressBar) {
-            progressBar.update(50, { task: 'Initial prompt generated' });
-        }
-
-        // Adaptive Iterative Refinement
-        const progressPerIteration = 40 / recommendedIterations;
-            for (let i = 0; i < recommendedIterations; i++) {
-                const iterationNum = i + 2;
-            if (progressBar) {
-                progressBar.update(50 + (i * progressPerIteration), { 
-                    task: `Adaptive refinement (${iterationNum}/${recommendedIterations + 1}) for ${context.domain}...` 
-                });
-            }
-            
-                const currentPromptJson = JSON.stringify(workingPrompt, null, 2);
-                const { prompt: refinedPrompt, edits } = await refinePrompt(
-                    client, currentPromptJson, refinementHistory, config.model, iterationNum
-                );
-
-                if (!refinedPrompt) {
-                console.log(themeManager.color('warning')(`\nRefinement ${iterationNum} failed, using previous version.`));
-                    break;
-                }
-
-                workingPrompt = refinedPrompt;
-                refinementHistory.push({ iteration: iterationNum, edits });
-            }
-
-        if (progressBar) {
-            progressBar.update(90, { task: 'Finalizing agentic output...' });
-        }
-
-        // Optimized evaluation
-        const evaluation = await evaluatePrompt();
-        
-        // Streamlined performance metrics
-        const performanceMetrics = {
-            accuracy_gain: `Estimated ${20 + (complexityScore * 3)}% improvement`,
-            optimization_level: strategy.focus,
-            quality_score: evaluation.overallScore.toFixed(1),
-            iterations_applied: refinementHistory.length
-        };
-
-        // Add to conversation memory
-        // conversationMemory.addEntry(prompt, workingPrompt, { // Removed as per stub removal
-        //     complexityScore,
-        //     difficulty,
-        //     domain: context.domain,
-        //     iterations: recommendedIterations
-        // });
-
-            // Generate output filename in pe2-prompts folder
-        if (!config._cliOptions?.outputFile) {
-        if (!fs.existsSync(PROMPTS_DIR)) {
-            fs.mkdirSync(PROMPTS_DIR, { recursive: true });
-        }
-        }
-        // Determine output file
-        let outputFile;
-        const fromCli = config._cliOptions && config._cliOptions.outputFile;
-        if (fromCli) {
-            outputFile = path.isAbsolute(config._cliOptions.outputFile)
-                ? config._cliOptions.outputFile
-                : path.join(process.cwd(), config._cliOptions.outputFile);
-        } else {
-        const outputFileName = `pe2-session-${sessionId}.md`;
-            outputFile = path.join(PROMPTS_DIR, outputFileName);
-        }
-            
-        // Generate markdown output
-        const finalOutput = formatMarkdownOutput(
-                workingPrompt, refinementHistory, performanceMetrics, difficulty, complexityScore
-            );
-
-        // Save to file
-        fs.writeFileSync(outputFile, finalOutput, 'utf-8');
-        
-        // Save to session
-        // sessionManager.addPrompt(prompt, workingPrompt, complexityScore); // Removed as per stub removal
-        
-        // Track statistics
-        const usageTokens = 0; // Could be aggregated from provider responses if exposed
-        statsTracker.track(config.model, complexityScore, usageTokens);
-        
-        // Store last result for copy command
-        lastResult = typeof finalOutput === 'string' ? finalOutput : JSON.stringify(workingPrompt, null, 2);
-        
-        // Complete and stop progress bar
-        if (progressBar) {
-            progressBar.update(100, { task: 'Complete!' });
-            progressBar.stop();
-            progressBar = null;
+        if (!result.success) {
+            return;
         }
         
-        console.log(themeManager.color('success')(`\n✓ PE²-optimized prompt saved to ${outputFile}`));
-        console.log(themeManager.color('info')(`📊 ${context.domain} domain | ${difficulty} complexity | ${refinementHistory.length} iterations | ${complexityScore}/20 score`));
+        const { outputFile: resultOutputFile } = result;
+        const resultContent = fs.readFileSync(resultOutputFile, 'utf-8');
+        lastResult = resultContent;
+        
+        console.log(themeManager.color('success')(`\n✓ PE²-optimized prompt saved to ${resultOutputFile}`));
+        const refinementCount = result.refinementHistory?.length || 0;
+        console.log(themeManager.color('info')(`📊 ${context.domain} domain | ${difficulty} complexity | ${refinementCount} iterations | ${complexityScore}/${complexityScoreMax} score`));
         console.log(themeManager.color('info')(`🎯 Strategy: ${strategy.focus} optimization\n`));
         
-        // Show suggestion to copy
         console.log(themeManager.color('muted')('Tip: Use /copy to copy the result to clipboard'));
         
-        // Reset title
         setTerminalTitle('KleoSr PE²-CLI - Interactive Mode');
         isProcessingPrompt = false;
         
@@ -1213,19 +846,23 @@ async function processPrompt(prompt, client, config, sessionId) {
             progressBar.stop();
             progressBar = null;
         }
-        console.log(themeManager.color('error')(`✗ Error: ${error.message}\n`));
+        const exitCode = handleError(error, themeManager);
         setTerminalTitle('KleoSr PE²-CLI - Interactive Mode');
         isProcessingPrompt = false;
+        if (exitCode !== 0 && !(error instanceof ValidationError)) {
+            throw error;
+        }
     }
 }
 
 async function main() {
     setTerminalTitle('KleoSr PE2-CLI');
     const program = new Command();
+    
     program
         .name('pe2-cli')
         .description('🚀 KleoSr PE2-CLI: Convert raw prompts to PE2-optimized prompts using adaptive intelligence.')
-        .version('3.3.7')
+        .version('3.4.5')
         .argument('[input]', 'Text prompt or path to file (optional - if not provided, starts interactive mode)')
         .option('--model <model>', 'OpenRouter model name (overrides config)')
         .option('--iterations <number>', 'Number of PE2 refinement rounds (auto-detected if not specified)', parseInt)
@@ -1236,6 +873,10 @@ async function main() {
         .option('--text', 'Force input to be treated as text (not file path)')
         .option('--file', 'Force input to be treated as file path')
         .option('--provider <provider>', 'Override provider for this run (openai|anthropic|google|openrouter|ollama)')
+        .showHelpAfterError('(add --help for additional information)')
+        .configureOutput({
+            outputError: (str, write) => write(themeManager.color('error')(str))
+        })
         .configureHelp({
             afterAll: `
 Examples:
@@ -1263,9 +904,10 @@ Input Methods:
             `
         });
 
-    program.parse();
-    const options = program.opts();
-    const input = program.args[0];
+    try {
+        await program.parseAsync(process.argv);
+        const options = program.opts();
+        const input = program.args[0];
 
     // Check if we should configure
     if (options.config) {
@@ -1275,9 +917,9 @@ Input Methods:
             output: process.stdout
         });
         
-        displayBanner();
-        console.log(chalk.hex('#50E3C2')(`🔧 Configuration Mode | v3.3.7 | ${new Date().toLocaleString()}`));
-        console.log(chalk.hex('#4A90E2')('='.repeat(78)));
+        displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
+            console.log(themeManager.color('success')(`🔧 Configuration Mode | v3.4.5 | ${new Date().toLocaleString()}`));
+        console.log(themeManager.color('primary')('='.repeat(78)));
         
         await promptForConfig(rl);
         rl.close();
@@ -1286,28 +928,22 @@ Input Methods:
 
     // Always interactive: banner is rendered inside interactiveMode
     await interactiveMode(input, options);
-    return;
-}
-
-// Map provider -> env var for automatic key resolution
-const PROVIDER_ENV_VARS = {
-    openai: 'OPENAI_API_KEY',
-    anthropic: 'ANTHROPIC_API_KEY',
-    google: 'GOOGLE_API_KEY',
-    openrouter: 'OPENROUTER_API_KEY',
-    ollama: 'OLLAMA_BASE_URL'
-};
-
-function resolveApiKey(provider, configApiKey) {
-    if (configApiKey && configApiKey.trim()) return configApiKey;
-    if (provider === 'ollama') {
-        return process.env[PROVIDER_ENV_VARS.ollama] || null;
+    } catch (error) {
+        if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') {
+            return;
+        }
+        console.error(themeManager.color('error')(`❌ Error: ${error.message}`));
+        if (error.stack && process.env.DEBUG) {
+            console.error(error.stack);
+        }
+        process.exit(error.exitCode || 1);
     }
-    const envVar = PROVIDER_ENV_VARS[provider] || 'OPENROUTER_API_KEY';
-    return process.env[envVar] || null;
 }
 
 main().catch(error => {
-    console.error(chalk.red(`❌ Unexpected error: ${error.message}`));
+    console.error(themeManager.color('error')(`❌ Unexpected error: ${error.message}`));
+    if (error.stack && process.env.DEBUG) {
+        console.error(error.stack);
+    }
     process.exit(1);
 });

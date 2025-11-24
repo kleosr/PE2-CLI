@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { Chalk } from 'chalk';
 import cliProgress from 'cli-progress';
 import clipboardy from 'clipboardy';
 import Table from 'cli-table3';
@@ -6,6 +7,7 @@ import { highlight } from 'cli-highlight';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { PROGRESS_BAR_CONFIG, UI_CONFIG, SESSION_CONFIG, PROMPT_LIMITS, DEFAULT_CONFIG } from './constants.js';
 
 // Session management
 export class SessionManager {
@@ -59,18 +61,18 @@ export class SessionManager {
 // Enhanced progress bar utility with better consistency
 export function createProgressBar(options = {}) {
     const defaultOptions = {
-        format: ' {bar} | {percentage}% | {task}',
-        barCompleteChar: '█',
-        barIncompleteChar: '▒',
-        hideCursor: true,
-        clearOnComplete: false, // Keep for consistency
-        stopOnComplete: false,  // Manual control
-        barsize: Math.min(40, Math.max(20, (process.stdout.columns || 80) - 40)),
+        format: PROGRESS_BAR_CONFIG.format,
+        barCompleteChar: PROGRESS_BAR_CONFIG.barCompleteChar,
+        barIncompleteChar: PROGRESS_BAR_CONFIG.barIncompleteChar,
+        hideCursor: PROGRESS_BAR_CONFIG.hideCursor,
+        clearOnComplete: PROGRESS_BAR_CONFIG.clearOnComplete,
+        stopOnComplete: PROGRESS_BAR_CONFIG.stopOnComplete,
+        barsize: Math.min(PROGRESS_BAR_CONFIG.maxBarSize, Math.max(PROGRESS_BAR_CONFIG.minBarSize, (process.stdout.columns || UI_CONFIG.terminalWidth.default) - PROGRESS_BAR_CONFIG.columnOffset)),
         forceRedraw: true,
         linewrap: false,
-        fps: 8,
+        fps: PROGRESS_BAR_CONFIG.fps,
         noTTYOutput: false,
-        notTTYSchedule: 2000,
+        notTTYSchedule: PROGRESS_BAR_CONFIG.notTTYSchedule,
         synchronousUpdate: false,
         ...options
     };
@@ -94,22 +96,24 @@ export function createProgressBar(options = {}) {
 
 // Enhanced status bar with improved styling and reduced redundancy
 export function displayStatusBar(config, options = {}) {
-    const width = Math.min(process.stdout.columns || 80, 100); // Max width for better readability
-    const showBorder = options.showBorder !== false; // Default to true, can be disabled
+    const { terminalWidth, statusBar } = UI_CONFIG;
+    const width = Math.min(process.stdout.columns || terminalWidth.default, terminalWidth.max);
+    const showBorder = options.showBorder !== false;
     const compact = options.compact || false;
     
     const status = config.apiKey ? '✓ Connected' : '✗ Not Connected';
     const provider = config.provider || 'Not Set';
     const model = config.model || 'Default';
     
-    // Truncate long model names for better layout
-    const displayModel = model.length > 20 ? model.substring(0, 17) + '...' : model;
+    const displayModel = model.length > statusBar.modelTruncateLength
+        ? model.substring(0, statusBar.modelDisplayLength) + statusBar.modelTruncateSuffix
+        : model;
     
     const statusText = compact 
         ? ` ${provider} | ${displayModel} | ${status} `
         : ` Provider: ${provider} | Model: ${displayModel} | Status: ${status} `;
     
-    const maxContentWidth = width - 4; // Account for borders
+    const maxContentWidth = width - statusBar.borderPadding;
     const truncatedText = statusText.length > maxContentWidth 
         ? statusText.substring(0, maxContentWidth - 3) + '...' 
         : statusText;
@@ -150,16 +154,15 @@ export const COMMANDS = {
 };
 
 // Enhanced auto-complete for commands with fuzzy matching
-export function getCommandSuggestions(input, limit = 5) {
+export function getCommandSuggestions(input, limit = SESSION_CONFIG.commandSuggestionsLimit) {
     if (!input.startsWith('/')) return [];
     
-    const partial = input.toLowerCase().slice(1); // Remove the '/' prefix
+    const partial = input.toLowerCase().slice(1);
     const commands = Object.keys(COMMANDS);
     
     if (partial === '') {
-        // Return most commonly used commands first
         const priorityCommands = ['/help', '/settings', '/config', '/model', '/clear'];
-        return priorityCommands.slice(0, limit);
+        return priorityCommands.slice(0, SESSION_CONFIG.priorityCommandsLimit);
     }
     
     // Fuzzy matching with scoring
@@ -254,10 +257,10 @@ export function validatePrompt(prompt) {
     if (!prompt || prompt.trim().length === 0) {
         return 'Please enter a prompt';
     }
-    if (prompt.length < 10) {
+    if (prompt.length < PROMPT_LIMITS.minLength) {
         return 'Prompt too short. Please provide more detail.';
     }
-    if (prompt.length > 10000) {
+    if (prompt.length > PROMPT_LIMITS.maxLength) {
         return 'Prompt too long. Consider breaking it down.';
     }
     return null;
@@ -284,7 +287,7 @@ export function formatOutput(data, format = 'markdown') {
 
 // Enhanced formatting with better responsiveness
 export function formatResponse(text, options = {}) {
-    const maxWidth = Math.min(options.maxWidth || 100, process.stdout.columns || 80);
+    const maxWidth = Math.min(options.maxWidth || UI_CONFIG.terminalWidth.max, process.stdout.columns || UI_CONFIG.terminalWidth.default);
     const indent = options.indent || 0;
     const prefix = ' '.repeat(indent);
     
@@ -366,41 +369,55 @@ export function highlightCode(code, language = 'javascript') {
     }
 }
 
-// Enhanced theme management with better contrast
+// Enhanced theme management with optimized Chalk instances
 export class ThemeManager {
     constructor() {
+        const colorLevel = this.detectColorLevel();
+        this.chalkInstance = new Chalk({ level: colorLevel });
+        this.chalkStderr = new Chalk({ level: colorLevel, stream: process.stderr });
+        
         this.themes = {
             dark: {
-                primary: '#6BB6FF',     // Improved contrast
-                secondary: '#FFE066',   // Better visibility
-                success: '#5AE6C5',     // Enhanced green
-                error: '#FF7B7B',       // Softer red
-                warning: '#FFE066',     // Consistent with secondary
-                info: '#C5A9EA',        // Better purple contrast
-                text: '#FFFFFF',        // Pure white for max contrast
-                muted: '#A0A0A0',       // Improved muted text visibility
-                border: '#4A4A4A',      // Better border contrast
-                background: '#1A1A1A'   // Dark background reference
+                primary: '#6BB6FF',
+                secondary: '#FFE066',
+                success: '#5AE6C5',
+                error: '#FF7B7B',
+                warning: '#FFE066',
+                info: '#C5A9EA',
+                text: '#FFFFFF',
+                muted: '#A0A0A0',
+                border: '#4A4A4A',
+                background: '#1A1A1A'
             },
             light: {
-                primary: '#0052CC',     // Darker blue for better contrast
-                secondary: '#B8860B',   // Improved golden color
-                success: '#00A846',     // Darker green
-                error: '#C62828',       // Darker red
-                warning: '#B8860B',     // Consistent with secondary
-                info: '#6A4C93',        // Better purple for light theme
-                text: '#000000',        // Pure black for max contrast
-                muted: '#505050',       // Better visibility than gray
-                border: '#D0D0D0',      // Light border
-                background: '#FFFFFF'   // Light background reference
+                primary: '#0052CC',
+                secondary: '#B8860B',
+                success: '#00A846',
+                error: '#C62828',
+                warning: '#B8860B',
+                info: '#6A4C93',
+                text: '#000000',
+                muted: '#505050',
+                border: '#D0D0D0',
+                background: '#FFFFFF'
             }
         };
         this.currentTheme = 'dark';
+        this.colorCache = new Map();
+    }
+
+    detectColorLevel() {
+        if (process.env.FORCE_COLOR) {
+            const level = parseInt(process.env.FORCE_COLOR, 10);
+            return isNaN(level) ? 1 : Math.min(3, Math.max(0, level));
+        }
+        return chalk.level;
     }
 
     setTheme(theme) {
         if (this.themes[theme]) {
             this.currentTheme = theme;
+            this.colorCache.clear();
             return true;
         }
         return false;
@@ -411,7 +428,17 @@ export class ThemeManager {
     }
 
     color(type) {
-        return chalk.hex(this.colors[type]);
+        const cacheKey = `${this.currentTheme}-${type}`;
+        if (this.colorCache.has(cacheKey)) {
+            return this.colorCache.get(cacheKey);
+        }
+        const colorFn = this.chalkInstance.hex(this.colors[type]);
+        this.colorCache.set(cacheKey, colorFn);
+        return colorFn;
+    }
+
+    error(str) {
+        return this.chalkStderr.hex(this.colors.error)(str);
     }
 }
 
@@ -501,8 +528,8 @@ export class UserPreferences {
             compactMode: false,
             showBorders: true,
             autoSave: true,
-            maxHistoryItems: 50,
-            defaultProvider: 'openrouter',
+            maxHistoryItems: SESSION_CONFIG.maxHistoryItems,
+            defaultProvider: DEFAULT_CONFIG.provider,
             lastUsedCommands: [],
             favoriteModels: [],
             uiPreferences: {
@@ -533,37 +560,31 @@ export class UserPreferences {
         this.save();
     }
 
-    // Track command usage for smart suggestions
     trackCommand(command) {
         const lastUsed = this.preferences.lastUsedCommands || [];
         const filtered = lastUsed.filter(cmd => cmd !== command);
-        this.preferences.lastUsedCommands = [command, ...filtered].slice(0, 10);
+        this.preferences.lastUsedCommands = [command, ...filtered].slice(0, SESSION_CONFIG.maxLastUsedCommands);
         this.save();
     }
 
-    // Add model to favorites
     addFavoriteModel(model) {
         const favorites = this.preferences.favoriteModels || [];
         if (!favorites.includes(model)) {
-            this.preferences.favoriteModels = [model, ...favorites].slice(0, 5);
+            this.preferences.favoriteModels = [model, ...favorites].slice(0, SESSION_CONFIG.maxFavoriteModels);
             this.save();
         }
     }
 
-    // Get personalized command suggestions
-    getPersonalizedSuggestions(limit = 5) {
+    getPersonalizedSuggestions(limit = SESSION_CONFIG.commandSuggestionsLimit) {
         const lastUsed = this.preferences.lastUsedCommands || [];
         const allCommands = Object.keys(COMMANDS);
-        
-        // Prioritize recently used commands
         const suggestions = [...new Set([...lastUsed, ...allCommands])].slice(0, limit);
         return suggestions;
     }
 
-    // UI preference helpers
     shouldUseCompactMode() {
-        const terminalWidth = process.stdout.columns || 80;
-        return this.preferences.compactMode || terminalWidth < 70;
+        const terminalWidth = process.stdout.columns || UI_CONFIG.terminalWidth.default;
+        return this.preferences.compactMode || terminalWidth < UI_CONFIG.terminalWidth.compactThreshold;
     }
 
     shouldShowBorders() {

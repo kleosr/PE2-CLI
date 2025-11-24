@@ -1,6 +1,6 @@
 {
   "name": "pe2",
-  "version": "1.0.0",
+  "version": "3.4.5",
   "description": "KleoSr PE2 CLI workspace",
   "type": "module",
   "bin": {

@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import figlet from 'figlet';
 import { displayStatusBar, createTable } from './utils.js';
+import { UI_CONFIG, PROMPT_LIMITS } from './constants.js';
 
 export function clearConsole() {
   process.stdout.write(process.platform === 'win32' ? '\x1Bc' : '\x1B[2J\x1B[3J\x1B[H');
@@ -20,8 +21,8 @@ export function displayBanner({ themeManager, userPreferences, config, interacti
   setTerminalTitle(title);
   clearConsole();
 
-  const terminalWidth = process.stdout.columns || 80;
-  const isNarrow = terminalWidth < 60;
+  const terminalWidth = process.stdout.columns || UI_CONFIG.terminalWidth.default;
+  const isNarrow = terminalWidth < UI_CONFIG.terminalWidth.narrowThreshold;
 
   if (isNarrow) {
     console.log(themeManager.color('primary')('\n PE²-CLI'));
@@ -59,27 +60,30 @@ export function formatApiKeyDisplay(apiKey, showFullKey = false) {
   if (!apiKey) return 'Not set';
   if (showFullKey) return apiKey;
   const keyLength = apiKey.length;
-  if (keyLength <= 12) {
-    return apiKey.substring(0, 4) + '•'.repeat(Math.max(4, keyLength - 8)) + apiKey.substring(keyLength - 4);
+  const { shortApiKeyThreshold, shortApiKeyPrefix, shortApiKeySuffix, apiKeyDisplayLength, apiKeyMaskLength } = PROMPT_LIMITS;
+  if (keyLength <= shortApiKeyThreshold) {
+    return apiKey.substring(0, shortApiKeyPrefix) + '•'.repeat(Math.max(shortApiKeyPrefix, keyLength - (shortApiKeyPrefix + shortApiKeySuffix))) + apiKey.substring(keyLength - shortApiKeySuffix);
   }
-  return apiKey.substring(0, 8) + '•'.repeat(8) + apiKey.substring(keyLength - 4);
+  return apiKey.substring(0, apiKeyDisplayLength) + '•'.repeat(apiKeyMaskLength) + apiKey.substring(keyLength - shortApiKeySuffix);
 }
 
-export function formatContentPreview(content, maxLength = 200, showFullLength = false) {
+export function formatContentPreview(content, maxLength = PROMPT_LIMITS.previewMaxLength, showFullLength = false) {
   if (!content) return '';
   if (content.length <= maxLength || showFullLength) return content;
   const truncated = content.substring(0, maxLength);
   const lastSpace = truncated.lastIndexOf(' ');
-  const cleanTruncated = lastSpace > maxLength * 0.7 ? truncated.substring(0, lastSpace) : truncated;
+  const truncationThreshold = 0.7;
+  const cleanTruncated = lastSpace > maxLength * truncationThreshold ? truncated.substring(0, lastSpace) : truncated;
   return `${cleanTruncated}... [${content.length - cleanTruncated.length} more characters]`;
 }
 
-export function formatProcessingPromptDisplay(prompt, maxLength = 100) {
+export function formatProcessingPromptDisplay(prompt, maxLength = PROMPT_LIMITS.processingDisplayMaxLength) {
   if (!prompt) return '';
   if (prompt.length <= maxLength) return prompt;
   const truncated = prompt.substring(0, maxLength);
   const lastSpace = truncated.lastIndexOf(' ');
-  const cleanTruncated = lastSpace > maxLength * 0.7 ? truncated.substring(0, lastSpace) : truncated;
+  const truncationThreshold = 0.7;
+  const cleanTruncated = lastSpace > maxLength * truncationThreshold ? truncated.substring(0, lastSpace) : truncated;
   return `${cleanTruncated}... [${prompt.length} chars total]`;
 }
 
@@ -93,8 +97,8 @@ export const DIFFICULTY_INDICATORS = {
 
 export function displayComplexityAnalysis({ themeManager }, difficulty, iterations, score, rawPrompt) {
   const indicator = DIFFICULTY_INDICATORS[difficulty];
-  const terminalWidth = Math.min(process.stdout.columns || 80, 100);
-  const separatorLength = Math.min(50, terminalWidth - 10);
+  const terminalWidth = Math.min(process.stdout.columns || UI_CONFIG.terminalWidth.default, UI_CONFIG.terminalWidth.max);
+  const separatorLength = Math.min(UI_CONFIG.separator.defaultLength, terminalWidth - 10);
   console.log(themeManager.color('info')('\n🔍 PROMPT COMPLEXITY ANALYSIS'));
   console.log(themeManager.color('muted')('─'.repeat(separatorLength)));
   console.log(themeManager.color('text')(`📊 Complexity Score: ${score}/20`));
