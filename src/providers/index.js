@@ -10,7 +10,6 @@ export const PROVIDERS = {
     baseURL: 'https://api.openai.com/v1',
     models: [
       'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo',
-      // Hypothetical/future: gpt-5 (only show if user opts-in via env flag)
     ],
     defaultModel: 'gpt-4o-mini',
     keyLabel: 'OpenAI API Key'
@@ -20,7 +19,6 @@ export const PROVIDERS = {
     baseURL: 'https://api.anthropic.com/v1',
     models: [
       'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229',
-      // High-end alias: opus-4.1 (alias to latest Opus if available)
     ],
     defaultModel: 'claude-3-5-sonnet-20241022',
     keyLabel: 'Anthropic API Key'

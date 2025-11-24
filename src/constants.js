@@ -1,6 +1,3 @@
-// Configuration constants - extracted from hardcoded values throughout the codebase
-// All values that could change are centralized here for easy configuration
-
 export const DEFAULT_CONFIG = {
   model: 'openai/gpt-4o-mini',
   provider: 'openrouter',

@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import figlet from 'figlet';
-import { displayStatusBar, createTable } from './utils.js';
+import { displayStatusBar, createTable } from './utils/index.js';
 import { UI_CONFIG, PROMPT_LIMITS } from './constants.js';
 
 export function clearConsole() {
@@ -25,10 +25,14 @@ export function displayBanner({ themeManager, userPreferences, config, interacti
   const isNarrow = terminalWidth < UI_CONFIG.terminalWidth.narrowThreshold;
 
   if (isNarrow) {
-    console.log(themeManager.color('primary')('\n PE²-CLI'));
-    console.log(themeManager.color('secondary')(' ⚡ Prompt Engineering 2.0'));
+    console.log(themeManager.color('primary')('\n╔═══════════════════════════════╗'));
+    console.log(themeManager.color('primary')('║      PE²-CLI v3.4.5          ║'));
+    console.log(themeManager.color('primary')('╚═══════════════════════════════╝'));
+    console.log(themeManager.color('secondary')('  ⚡ Prompt Engineering 2.0'));
   } else {
-    console.log(renderAnsiShadowFiglet('KLEOSR PE2'));
+    const figletText = renderAnsiShadowFiglet('KLEOSR PE2');
+    console.log(figletText);
+    console.log(themeManager.color('muted')(' '.repeat(Math.max(0, Math.floor((terminalWidth - 30) / 2))) + 'v3.4.5 • Prompt Engineering 2.0'));
   }
 
   console.log();
@@ -39,16 +43,19 @@ export function displayBanner({ themeManager, userPreferences, config, interacti
   console.log();
 
   if (isNarrow) {
-    console.log(themeManager.color('info')('Quick commands: /help /settings /config'));
+    console.log(themeManager.color('info')('Quick: /help /settings /config'));
   } else {
-    console.log(themeManager.color('info')('Essential Commands:'));
-    console.log(themeManager.color('muted')('  /settings    Configure API provider, model, and key'));
-    console.log(themeManager.color('muted')('  /config      View current settings'));
-    console.log(themeManager.color('muted')('  /help        Show all commands'));
+    const separator = themeManager.color('muted')('─'.repeat(Math.min(terminalWidth - 4, 60)));
+    console.log(separator);
+    console.log(themeManager.color('info')('  Essential Commands:'));
+    console.log(themeManager.color('muted')('    /settings    Configure API provider, model, and key'));
+    console.log(themeManager.color('muted')('    /config      View current settings'));
+    console.log(themeManager.color('muted')('    /help        Show all available commands'));
+    console.log(separator);
   }
 
   console.log();
-  console.log(themeManager.color('text')('Type your prompt or use a command to begin.'));
+  console.log(themeManager.color('text')('  💡 Type your prompt or use a command to begin.'));
   console.log();
 }
 
@@ -99,12 +106,23 @@ export function displayComplexityAnalysis({ themeManager }, difficulty, iteratio
   const indicator = DIFFICULTY_INDICATORS[difficulty];
   const terminalWidth = Math.min(process.stdout.columns || UI_CONFIG.terminalWidth.default, UI_CONFIG.terminalWidth.max);
   const separatorLength = Math.min(UI_CONFIG.separator.defaultLength, terminalWidth - 10);
-  console.log(themeManager.color('info')('\n🔍 PROMPT COMPLEXITY ANALYSIS'));
-  console.log(themeManager.color('muted')('─'.repeat(separatorLength)));
-  console.log(themeManager.color('text')(`📊 Complexity Score: ${score}/20`));
-  console.log(themeManager.color('text')(`🎚️  Difficulty Level: ${indicator} ${difficulty}`));
-  console.log(themeManager.color('text')(`🔄 Recommended Iterations: ${iterations}`));
-  console.log(themeManager.color('text')(`📝 Word Count: ${rawPrompt.split(/\s+/).length} words`));
+  const wordCount = rawPrompt.split(/\s+/).length;
+  
+  console.log();
+  console.log(themeManager.color('info')('╔' + '═'.repeat(separatorLength - 2) + '╗'));
+  console.log(themeManager.color('info')('║' + ' '.repeat(Math.floor((separatorLength - 30) / 2)) + '🔍 PROMPT COMPLEXITY ANALYSIS' + ' '.repeat(Math.ceil((separatorLength - 30) / 2)) + '║'));
+  console.log(themeManager.color('info')('╚' + '═'.repeat(separatorLength - 2) + '╝'));
+  console.log();
+  
+  const scoreBar = '█'.repeat(Math.floor((score / 20) * 20)) + '░'.repeat(20 - Math.floor((score / 20) * 20));
+  const scoreColor = score <= 4 ? 'success' : score <= 8 ? 'warning' : score <= 12 ? 'secondary' : score <= 16 ? 'error' : 'error';
+  
+  console.log(themeManager.color('text')('  📊 Complexity Score:'), themeManager.color(scoreColor)(`${score}/20`));
+  console.log(themeManager.color('muted')(`    ${scoreBar}`));
+  console.log(themeManager.color('text')(`  🎚️  Difficulty Level: ${indicator} ${difficulty}`));
+  console.log(themeManager.color('text')(`  🔄 Recommended Iterations: ${themeManager.color('primary')(iterations)}`));
+  console.log(themeManager.color('text')(`  📝 Word Count: ${wordCount} words`));
+  console.log();
   console.log(themeManager.color('muted')('─'.repeat(separatorLength)));
 }
 

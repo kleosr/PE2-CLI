@@ -1,9 +1,5 @@
 import OpenAI from 'openai';
 
-/**
- * Enhanced OpenAI client wrapper with complete API support
- * Supports all chat completion parameters and proper error handling
- */
 export function createOpenAIClient(apiKey, baseURL = 'https://api.openai.com/v1', customHeaders = {}) {
     const defaultHeaders = {
         'HTTP-Referer': 'https://pe2-cli-tool.local',
@@ -17,16 +13,13 @@ export function createOpenAIClient(apiKey, baseURL = 'https://api.openai.com/v1'
         defaultHeaders
     });
 
-    // Validate API key format
     if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
         throw new Error('OpenAI API key is required and must be a non-empty string');
     }
 
-    // Enhanced chat completions with full parameter support
     const originalCreate = client.chat.completions.create.bind(client.chat.completions);
     
     client.chat.completions.create = async function(params) {
-        // Validate required parameters
         if (!params.model || typeof params.model !== 'string') {
             throw new Error('OpenAI model parameter is required and must be a string');
         }
@@ -35,7 +28,6 @@ export function createOpenAIClient(apiKey, baseURL = 'https://api.openai.com/v1'
             throw new Error('OpenAI messages parameter is required and must be a non-empty array');
         }
 
-        // Validate message format
         for (const message of params.messages) {
             if (!message.role || !['system', 'user', 'assistant'].includes(message.role)) {
                 throw new Error(`Invalid message role: ${message.role}. Must be 'system', 'user', or 'assistant'`);
@@ -45,7 +37,6 @@ export function createOpenAIClient(apiKey, baseURL = 'https://api.openai.com/v1'
             }
         }
 
-        // Set reasonable defaults for optional parameters
         const enhancedParams = {
             model: params.model,
             messages: params.messages,
@@ -63,7 +54,6 @@ export function createOpenAIClient(apiKey, baseURL = 'https://api.openai.com/v1'
         try {
             return await originalCreate(enhancedParams);
         } catch (error) {
-            // Enhanced error handling with specific OpenAI error types
             if (error.status === 401) {
                 throw new Error('OpenAI authentication failed. Please check your API key.');
             } else if (error.status === 429) {

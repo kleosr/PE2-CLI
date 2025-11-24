@@ -1,12 +1,3 @@
-/**
- * OpenRouter client implementation
- * Provides access to multiple LLM providers through OpenRouter's unified API
- */
-
-/**
- * OpenRouter client that implements the LLMClient interface
- * Uses OpenAI-compatible API format
- */
 export class OpenRouterClient {
     constructor(options) {
         if (!options.apiKey || typeof options.apiKey !== 'string') {
@@ -27,7 +18,6 @@ export class OpenRouterClient {
     chat = {
         completions: {
             create: async (options) => {
-                // Validate required parameters
                 if (!options.model || typeof options.model !== 'string') {
                     throw new Error('OpenRouter model parameter is required and must be a string');
                 }
@@ -36,7 +26,6 @@ export class OpenRouterClient {
                     throw new Error('OpenRouter messages parameter is required and must be a non-empty array');
                 }
 
-                // Validate message format
                 for (const message of options.messages) {
                     if (!message.role || !['system', 'user', 'assistant'].includes(message.role)) {
                         throw new Error(`Invalid message role: ${message.role}. Must be 'system', 'user', or 'assistant'`);
@@ -46,7 +35,6 @@ export class OpenRouterClient {
                     }
                 }
 
-                // Prepare request body with OpenRouter-specific parameters
                 const requestBody = {
                     model: options.model,
                     messages: options.messages,
@@ -73,7 +61,6 @@ export class OpenRouterClient {
 
                     const data = await response.json();
                     
-                    // Validate response format
                     if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
                         throw new Error('Invalid response format from OpenRouter');
                     }
@@ -105,9 +92,6 @@ export class OpenRouterClient {
         }
     };
 
-    /**
-     * Handle error responses from OpenRouter API
-     */
     async handleErrorResponse(response) {
         let errorMessage = 'OpenRouter API error';
         
@@ -115,7 +99,6 @@ export class OpenRouterClient {
             const errorData = await response.json();
             errorMessage = errorData.error?.message || errorData.message || errorMessage;
         } catch {
-            // If we can't parse the error response, use the status text
             errorMessage = response.statusText || errorMessage;
         }
 
@@ -150,9 +133,6 @@ export class OpenRouterClient {
         }
     }
 
-    /**
-     * Get available models from OpenRouter
-     */
     async getModels() {
         try {
             const response = await fetch(`${this.baseURL}/models`, {
@@ -174,9 +154,6 @@ export class OpenRouterClient {
         }
     }
 
-    /**
-     * Get account information
-     */
     async getAccount() {
         try {
             const response = await fetch(`${this.baseURL}/auth/key`, {
@@ -198,16 +175,10 @@ export class OpenRouterClient {
     }
 }
 
-/**
- * Factory function to create OpenRouter client
- */
 export function createOpenRouterClient(options) {
     return new OpenRouterClient(options);
 }
 
-/**
- * Helper function for backward compatibility with existing code
- */
 export function createOpenAICompatibleClient(apiKey, baseURL) {
     return new OpenRouterClient({
         apiKey,

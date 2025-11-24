@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import { createProgressBar } from './utils.js';
+import { createProgressBar } from './utils/index.js';
 import { getInitialTemplate, getRefinementTemplate } from './templates.js';
 import { buildMessages } from './messages.js';
 import { analyzePromptComplexity } from './analysis.js';
@@ -45,7 +45,6 @@ export async function generateInitialPrompt(client, rawPrompt, model) {
           };
         } catch {}
       }
-      // Fallback
       return {
         prompt: {
           context: `The user wants to: ${rawPrompt.substring(0, 500)}${rawPrompt.length > 500 ? '...' : ''}`,

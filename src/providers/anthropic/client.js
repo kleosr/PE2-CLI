@@ -1,11 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-/**
- * Enhanced Anthropic client wrapper with complete Claude API support
- * Supports all message parameters, proper system prompt handling, and error handling
- */
 export function createAnthropicClient(apiKey, customOptions = {}) {
-    // Validate API key
     if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
         throw new Error('Anthropic API key is required and must be a non-empty string');
     }
@@ -18,12 +13,7 @@ export function createAnthropicClient(apiKey, customOptions = {}) {
     return {
         chat: {
             completions: {
-                /**
-                 * Enhanced create method with full Claude API support
-                 * @param {{model:string, messages:Array<{role:string,content:string}>, max_tokens?:number, temperature?:number, top_p?:number, stop_sequences?:Array<string>, stream?:boolean}} opts
-                 */
                 async create(opts) {
-                    // Validate required parameters
                     if (!opts.model || typeof opts.model !== 'string') {
                         throw new Error('Anthropic model parameter is required and must be a string');
                     }
@@ -32,7 +22,6 @@ export function createAnthropicClient(apiKey, customOptions = {}) {
                         throw new Error('Anthropic messages parameter is required and must be a non-empty array');
                     }
 
-                    // Validate message format
                     for (const message of opts.messages) {
                         if (!message.role || !['system', 'user', 'assistant'].includes(message.role)) {
                             throw new Error(`Invalid message role: ${message.role}. Must be 'system', 'user', or 'assistant'`);
@@ -42,21 +31,17 @@ export function createAnthropicClient(apiKey, customOptions = {}) {
                         }
                     }
 
-                    // Separate system messages from conversation messages
                     const systemMessages = opts.messages.filter(m => m.role === 'system');
                     const conversationMessages = opts.messages.filter(m => m.role !== 'system');
 
-                    // Validate conversation flow (must start with user, alternate user/assistant)
                     if (conversationMessages.length > 0 && conversationMessages[0].role !== 'user') {
                         throw new Error('Anthropic conversation must start with a user message');
                     }
 
-                    // Combine system messages into a single system prompt
                     const systemPrompt = systemMessages.length > 0 
                         ? systemMessages.map(m => m.content).join('\n\n')
                         : null;
 
-                    // Set parameters with validation and defaults
                     const anthropicParams = {
                         model: opts.model,
                         messages: conversationMessages,
@@ -77,7 +62,6 @@ export function createAnthropicClient(apiKey, customOptions = {}) {
                     try {
                         const response = await anthropic.messages.create(anthropicParams);
                         
-                        // Handle response format - Claude returns content as array of blocks
                         let text = '';
                         if (Array.isArray(response.content)) {
                             text = response.content
@@ -104,7 +88,6 @@ export function createAnthropicClient(apiKey, customOptions = {}) {
                             model: response.model || opts.model
                         };
                     } catch (error) {
-                        // Enhanced error handling for Anthropic-specific errors
                         if (error.status === 401) {
                             throw new Error('Anthropic authentication failed. Please check your API key.');
                         } else if (error.status === 429) {

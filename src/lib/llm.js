@@ -1,11 +1,3 @@
-/**
- * LLM client interface definitions and utilities
- * Provides abstractions for all supported LLM providers
- */
-
-/**
- * LLM error types
- */
 export class LLMError extends Error {
     constructor(message, provider, statusCode, originalError) {
         super(message);
@@ -44,13 +36,7 @@ export class LLMValidationError extends LLMError {
     }
 }
 
-/**
- * Utility functions for LLM operations
- */
 export class LLMUtils {
-    /**
-     * Validate message format
-     */
     static validateMessages(messages) {
         if (!Array.isArray(messages) || messages.length === 0) {
             throw new Error('Messages must be a non-empty array');
@@ -66,23 +52,17 @@ export class LLMUtils {
         }
     }
 
-    /**
-     * Sanitize completion options
-     */
     static sanitizeOptions(options) {
         const sanitized = { ...options };
 
-        // Clamp temperature
         if (sanitized.temperature !== undefined) {
             sanitized.temperature = Math.max(0, Math.min(2, sanitized.temperature));
         }
 
-        // Clamp top_p
         if (sanitized.top_p !== undefined) {
             sanitized.top_p = Math.max(0, Math.min(1, sanitized.top_p));
         }
 
-        // Clamp penalties
         if (sanitized.frequency_penalty !== undefined) {
             sanitized.frequency_penalty = Math.max(-2, Math.min(2, sanitized.frequency_penalty));
         }
@@ -90,7 +70,6 @@ export class LLMUtils {
             sanitized.presence_penalty = Math.max(-2, Math.min(2, sanitized.presence_penalty));
         }
 
-        // Ensure max_tokens is positive
         if (sanitized.max_tokens !== undefined) {
             sanitized.max_tokens = Math.max(1, sanitized.max_tokens);
         }
@@ -98,17 +77,10 @@ export class LLMUtils {
         return sanitized;
     }
 
-    /**
-     * Count tokens (approximate)
-     */
     static estimateTokens(text) {
-        // Rough estimation: ~4 characters per token for English text
         return Math.ceil(text.length / 4);
     }
 
-    /**
-     * Format error message from provider error
-     */
     static formatProviderError(error, provider) {
         if (error.status === 401) return 'Authentication failed';
         if (error.status === 429) return 'Rate limit exceeded';

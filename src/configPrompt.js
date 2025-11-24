@@ -2,7 +2,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { PROVIDERS } from './providers/index.js';
 import { CONFIG_FILE, saveConfig } from './config.js';
-import { ThemeManager } from './utils.js';
+import { ThemeManager } from './utils/index.js';
 
 const themeManager = new ThemeManager();
 

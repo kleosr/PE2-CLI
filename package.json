@@ -4,7 +4,7 @@
   "description": "🚀 KleoSr PE2-CLI: Convert raw prompts to PE2-optimized prompts using adaptive intelligence",
   "type": "module",
   "bin": {
-    "pe2-cli": "src/cli.js"
+    "pe2-cli": "src/cli/main.js"
   },
   "scripts": {
     "start": "node ./src/cli.js",

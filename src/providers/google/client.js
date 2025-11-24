@@ -1,11 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-/**
- * Enhanced Google Gemini client wrapper with complete API support
- * Supports proper conversation handling, safety settings, and all Gemini parameters
- */
 export function createGoogleClient(apiKey, customOptions = {}) {
-    // Validate API key
     if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
         throw new Error('Google API key is required and must be a non-empty string');
     }
@@ -15,12 +10,7 @@ export function createGoogleClient(apiKey, customOptions = {}) {
     return {
         chat: {
             completions: {
-                /**
-                 * Enhanced create method with full Gemini API support
-                 * @param {{model:string, messages:Array<{role:string,content:string}>, max_tokens?:number, temperature?:number, top_p?:number, top_k?:number, stop_sequences?:Array<string>, safety_settings?:Array}} opts
-                 */
                 async create(opts) {
-                    // Validate required parameters
                     if (!opts.model || typeof opts.model !== 'string') {
                         throw new Error('Google model parameter is required and must be a string');
                     }
@@ -29,7 +19,6 @@ export function createGoogleClient(apiKey, customOptions = {}) {
                         throw new Error('Google messages parameter is required and must be a non-empty array');
                     }
 
-                    // Validate message format
                     for (const message of opts.messages) {
                         if (!message.role || !['system', 'user', 'assistant'].includes(message.role)) {
                             throw new Error(`Invalid message role: ${message.role}. Must be 'system', 'user', or 'assistant'`);
@@ -39,17 +28,14 @@ export function createGoogleClient(apiKey, customOptions = {}) {
                         }
                     }
 
-                    // Separate system messages and conversation messages
                     const systemMessages = opts.messages.filter(m => m.role === 'system');
                     const conversationMessages = opts.messages.filter(m => m.role !== 'system');
 
-                    // Convert to Gemini format - system instructions + chat history
                     let systemInstruction = null;
                     if (systemMessages.length > 0) {
                         systemInstruction = systemMessages.map(m => m.content).join('\n\n');
                     }
 
-                    // Convert conversation to Gemini chat format
                     const history = [];
                     const contents = [];
 
@@ -58,13 +44,11 @@ export function createGoogleClient(apiKey, customOptions = {}) {
                         const role = message.role === 'assistant' ? 'model' : 'user';
                         
                         if (i === conversationMessages.length - 1) {
-                            // Last message becomes the current input
                             contents.push({
                                 role: role,
                                 parts: [{ text: message.content }]
                             });
                         } else {
-                            // Previous messages become history
                             history.push({
                                 role: role,
                                 parts: [{ text: message.content }]
@@ -72,7 +56,6 @@ export function createGoogleClient(apiKey, customOptions = {}) {
                         }
                     }
 
-                    // Set up generation config with validation
                     const generationConfig = {
                         maxOutputTokens: opts.max_tokens || 2048,
                         ...(opts.temperature !== undefined && { 
@@ -89,7 +72,6 @@ export function createGoogleClient(apiKey, customOptions = {}) {
                         })
                     };
 
-                    // Default safety settings (can be overridden)
                     const defaultSafetySettings = [
                         {
                             category: 'HARM_CATEGORY_HARASSMENT',
@@ -112,7 +94,6 @@ export function createGoogleClient(apiKey, customOptions = {}) {
                     const safetySettings = opts.safety_settings || defaultSafetySettings;
 
                     try {
-                        // Create model with configuration
                         const modelConfig = {
                             model: opts.model,
                             generationConfig,
@@ -124,27 +105,22 @@ export function createGoogleClient(apiKey, customOptions = {}) {
 
                         let result;
                         if (history.length > 0) {
-                            // Use chat session for multi-turn conversations
                             const chat = genModel.startChat({ history });
                             result = await chat.sendMessage(contents[0].parts[0].text);
                         } else {
-                            // Single turn generation
                             result = await genModel.generateContent(contents[0].parts[0].text);
                         }
 
-                        // Extract text from response with proper error handling
                         let text = '';
                         let finishReason = 'stop';
                         
                         if (result?.response) {
                             const response = result.response;
                             
-                            // Check for safety blocking
                             if (response.promptFeedback?.blockReason) {
                                 throw new Error(`Google content blocked: ${response.promptFeedback.blockReason}`);
                             }
 
-                            // Extract text content
                             if (typeof response.text === 'function') {
                                 try {
                                     text = response.text();
@@ -188,7 +164,6 @@ export function createGoogleClient(apiKey, customOptions = {}) {
                             model: opts.model
                         };
                     } catch (error) {
-                        // Enhanced error handling for Google-specific errors
                         if (error.message?.includes('API_KEY_INVALID')) {
                             throw new Error('Google authentication failed. Please check your API key.');
                         } else if (error.message?.includes('QUOTA_EXCEEDED')) {
