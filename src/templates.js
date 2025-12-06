@@ -1,10 +1,4 @@
-export const DIFFICULTY_INDICATORS = {
-  NOVICE: '🟢',
-  INTERMEDIATE: '🟡',
-  ADVANCED: '🟠',
-  EXPERT: '🔴',
-  MASTER: '🟣'
-};
+import { DIFFICULTY_INDICATORS } from './ui.js';
 
 export const getInitialTemplate = (rawPrompt) => `
 You are an expert prompt engineer specializing in PE² (Prompt Engineering 2.0) optimization.
@@ -88,5 +82,3 @@ ${history.map(item => `### Iteration ${item.iteration}\n- ${item.edits}\n`).join
 *Generated with ❤️ by KleoSr PE²-CLI*
 `;
 }
-
-

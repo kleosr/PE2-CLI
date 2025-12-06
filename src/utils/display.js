@@ -31,7 +31,7 @@ export function createProgressBar(options = {}) {
         try {
             originalStop();
             process.stdout.write('\r\x1b[K\x1b[?25h');
-        } catch (error) {
+        } catch {
         }
     };
     
@@ -46,8 +46,8 @@ export function displayStatusBar(config, options = {}) {
     
     const themeManager = new ThemeManager();
     const status = config.apiKey ? themeManager.color('success')('✓ Connected') : themeManager.color('error')('✗ Not Connected');
-    const provider = config.provider || 'Not Set';
-    const model = config.model || 'Default';
+    const provider = config.provider ?? 'Not Set';
+    const model = config.model ?? 'Default';
     
     const displayModel = model.length > statusBar.modelTruncateLength
         ? model.substring(0, statusBar.modelDisplayLength) + statusBar.modelTruncateSuffix
@@ -93,8 +93,8 @@ export function formatOutput(data, format = 'markdown') {
 }
 
 export function formatResponse(text, options = {}) {
-    const maxWidth = Math.min(options.maxWidth || UI_CONFIG.terminalWidth.max, process.stdout.columns || UI_CONFIG.terminalWidth.default);
-    const indent = options.indent || 0;
+    const maxWidth = Math.min(options.maxWidth ?? UI_CONFIG.terminalWidth.max, process.stdout.columns ?? UI_CONFIG.terminalWidth.default);
+    const indent = options.indent ?? 0;
     const prefix = ' '.repeat(indent);
     
     if (text.length <= maxWidth - indent) {
@@ -136,8 +136,8 @@ export async function copyToClipboard(text) {
 
 export function createTable(headers, rows, options = {}) {
     const themeManager = new ThemeManager();
-    const minimal = options.minimal || false;
-    const compact = options.compact || false;
+    const minimal = options.minimal ?? false;
+    const compact = options.compact ?? false;
     
     const tableConfig = {
         head: headers,
@@ -165,7 +165,7 @@ export function createTable(headers, rows, options = {}) {
 export function highlightCode(code, language = 'javascript') {
     try {
         return highlight(code, { language });
-    } catch (error) {
+    } catch {
         return code;
     }
 }

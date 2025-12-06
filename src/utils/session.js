@@ -39,14 +39,9 @@ export class SessionManager {
     }
 
     loadHistory() {
-        const files = fs.readdirSync(this.sessionDir);
-        return files
+        return fs.readdirSync(this.sessionDir)
             .filter(f => f.endsWith('.json'))
-            .map(f => {
-                const content = fs.readFileSync(path.join(this.sessionDir, f), 'utf-8');
-                return JSON.parse(content);
-            })
+            .map(f => JSON.parse(fs.readFileSync(path.join(this.sessionDir, f), 'utf-8')))
             .sort((a, b) => b.timestamp - a.timestamp);
     }
 }
-

@@ -21,45 +21,17 @@ export const COMMANDS = {
 
 export function getCommandSuggestions(input, limit = SESSION_CONFIG.commandSuggestionsLimit) {
     if (!input.startsWith('/')) return [];
-    
+
     const partial = input.toLowerCase().slice(1);
     const commands = Object.keys(COMMANDS);
-    
+
     if (partial === '') {
-        const priorityCommands = ['/help', '/settings', '/config', '/model', '/clear'];
-        return priorityCommands.slice(0, SESSION_CONFIG.priorityCommandsLimit);
+        return ['/help', '/settings', '/config', '/model', '/clear'].slice(0, SESSION_CONFIG.priorityCommandsLimit);
     }
-    
-    const matches = commands
-        .map(cmd => {
-            const cmdName = cmd.toLowerCase().slice(1);
-            let score = 0;
-            
-            if (cmdName.startsWith(partial)) {
-                score = 1000 + (10 - partial.length);
-            }
-            else if (cmdName.includes(partial)) {
-                score = 500 + (10 - partial.length);
-            }
-            else {
-                let partialIndex = 0;
-                for (let i = 0; i < cmdName.length && partialIndex < partial.length; i++) {
-                    if (cmdName[i] === partial[partialIndex]) {
-                        partialIndex++;
-                        score += 10;
-                    }
-                }
-                if (partialIndex < partial.length) score = 0;
-            }
-            
-            return { cmd, score };
-        })
-        .filter(item => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit)
-        .map(item => item.cmd);
-    
-    return matches;
+
+    return commands
+        .filter(cmd => cmd.toLowerCase().slice(1).startsWith(partial))
+        .slice(0, limit);
 }
 
 export function validateAndSuggestCommand(input) {
@@ -80,15 +52,15 @@ export function validateAndSuggestCommand(input) {
     
     const suggestions = getCommandSuggestions(command, 3);
     
-    return {
-        valid: false,
-        isCommand: true,
-        command,
-        suggestions,
-        message: suggestions.length > 0 
-            ? `Unknown command "${command}". Did you mean: ${suggestions.join(', ')}?`
-            : `Unknown command "${command}". Type /help to see all commands.`
-    };
+        return {
+            valid: false,
+            isCommand: true,
+            command,
+            suggestions,
+            message: suggestions.length > 0
+                ? `Unknown command "${command}". Did you mean: ${suggestions.join(', ')}?`
+                : `Unknown command "${command}". Type /help to see all commands.`
+        };
 }
 
 export function handleKeyboardShortcuts(key, config) {
@@ -121,4 +93,3 @@ export function validatePrompt(prompt) {
     }
     return null;
 }
-

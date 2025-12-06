@@ -141,4 +141,3 @@ export const DEFAULT_EVALUATION = {
   scores: {},
   overallScore: 8.0
 };
-

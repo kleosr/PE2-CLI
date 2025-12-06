@@ -1,27 +1,22 @@
 import fs from 'fs';
 import readline from 'readline';
-import chalk from 'chalk';
 import { PROVIDERS, getProviderClient } from '../providers/index.js';
 import { getDefaultConfig, loadConfig, resolveApiKey } from '../config.js';
 import { promptForConfig } from '../configPrompt.js';
 import { analyzePromptComplexity } from '../analysis.js';
-import { displayBanner, displayInteractiveBanner, formatProcessingPromptDisplay, displayComplexityAnalysis } from '../ui.js';
+import { displayBanner, formatProcessingPromptDisplay, displayComplexityAnalysis } from '../ui.js';
 import { PROMPT_LIMITS } from '../constants.js';
-import { validateAndSuggestCommand } from '../utils/index.js';
+import { validateAndSuggestCommand } from '../utils/validation.js';
 import { ConfigError } from '../errorHandler.js';
 import { handleCommand } from './commands.js';
 import { processPrompt } from './promptProcessing.js';
 
 export async function interactiveMode(initialInput, cliOptions, themeManager, sessionManager, statsTracker, userPreferences) {
     if (initialInput && cliOptions.autoDifficulty) {
-        const rawPrompt = (() => {
-            try {
-                if (!cliOptions.text && !cliOptions.file && fs.existsSync(initialInput)) {
-                    return fs.readFileSync(initialInput, 'utf-8').trim();
-                }
-            } catch {}
-            return initialInput;
-        })();
+        let rawPrompt = initialInput;
+        if (!cliOptions.text && !cliOptions.file && fs.existsSync(initialInput)) {
+            rawPrompt = fs.readFileSync(initialInput, 'utf-8').trim();
+        }
         const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(rawPrompt);
         displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
         console.log(themeManager.color('info')(`📝 Input: ${formatProcessingPromptDisplay(rawPrompt, PROMPT_LIMITS.processingDisplayMaxLength)}`));
@@ -29,7 +24,7 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
         return;
     }
 
-    displayInteractiveBanner({ themeManager, userPreferences, config: loadConfig() });
+    displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: true });
     
     const rl = readline.createInterface({
         input: process.stdin,
@@ -44,10 +39,7 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
     if (cliOptions.model) {
         config.model = cliOptions.model;
     }
-    let resolvedApiKey = resolveApiKey(config.provider, config.apiKey);
-    if (!resolvedApiKey && config.provider === 'ollama') {
-        resolvedApiKey = PROVIDERS.ollama.baseURL;
-    }
+    const resolvedApiKey = resolveApiKey(config.provider, config.apiKey) ?? (config.provider === 'ollama' ? PROVIDERS.ollama.baseURL : null);
     if (resolvedApiKey) {
         config.apiKey = resolvedApiKey;
     }
@@ -60,7 +52,7 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
         }
         console.log(themeManager.color('warning')('⚠️  First time setup required.'));
         console.log(themeManager.color('muted')('Please configure your API provider and key to continue.\n'));
-        config = await promptForConfig(rl);
+        config = await promptForConfig();
         if (!config || !config.apiKey) {
             console.log(themeManager.color('error')('\n✗ Configuration cancelled or incomplete.'));
             rl.close();
@@ -74,7 +66,7 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
         if (!apiKeyInitial && config.provider !== 'ollama') {
             throw new ConfigError('API key is required. Please configure with /settings or set environment variable.');
         }
-        client = getProviderClient(config.provider || 'openrouter', apiKeyInitial);
+        client = getProviderClient(config.provider ?? 'openrouter', apiKeyInitial);
     } catch (error) {
         if (error instanceof ConfigError) {
             console.log(themeManager.color('error')(`\n✗ ${error.message}`));
@@ -115,15 +107,13 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
                 return;
             }
 
+            const result = await processPrompt(rawPrompt, client, { ...config, _cliOptions: cliOptions }, sessionCounter++, themeManager, statsTracker, userPreferences, lastResult);
+            if (result) lastResult = result.lastResult;
+            
             if (!cliOptions.interactive) {
-                const result = await processPrompt(rawPrompt, client, { ...config, _cliOptions: cliOptions }, sessionCounter++, themeManager, statsTracker, userPreferences, lastResult);
-                if (result) lastResult = result.lastResult;
                 rl.close();
                 return;
             }
-
-            const result = await processPrompt(rawPrompt, client, { ...config, _cliOptions: cliOptions }, sessionCounter++, themeManager, statsTracker, userPreferences, lastResult);
-            if (result) lastResult = result.lastResult;
         }
     }
 
@@ -160,23 +150,18 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
             
             process.stdout.write('\r\x1b[K');
             
-            const result = await handleCommand(command, rl, config, themeManager, sessionManager, userPreferences, lastResult);
+            const result = await handleCommand(command, config, themeManager, sessionManager, userPreferences, lastResult);
             
             if (result && typeof result === 'object') {
                 config = { ...config, ...result };
                 if (result.provider || result.apiKey) {
-                    const newApiKey = resolveApiKey(config.provider, config.apiKey);
-                    const newClient = config.provider ? getProviderClient(config.provider, newApiKey) : getProviderClient('openrouter', newApiKey);
-                    client = newClient;
+                    client = getProviderClient(config.provider || 'openrouter', resolveApiKey(config.provider, config.apiKey));
                 }
-
-                displayInteractiveBanner({ themeManager, userPreferences, config: loadConfig() });
-            }
-            
-            if (typeof result === 'string') {
+                displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: true });
+            } else if (typeof result === 'string') {
                 const processResult = await processPrompt(result, client, config, sessionCounter++, themeManager, statsTracker, userPreferences, lastResult);
                 if (processResult) lastResult = processResult.lastResult;
-            } else if (result && result.batch) {
+            } else if (result?.batch) {
                 for (const prompt of result.batch) {
                     console.log(`\n${themeManager.color('info')('Processing prompt:')} ${formatProcessingPromptDisplay(prompt, 80)}`);
                     const processResult = await processPrompt(prompt, client, config, sessionCounter++, themeManager, statsTracker, userPreferences, lastResult);
@@ -195,19 +180,19 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
         }
         
         if (trimmedInput === 'help') {
-            await handleCommand('/help', rl, config, themeManager, sessionManager, userPreferences, lastResult);
+            await handleCommand('/help', config, themeManager, sessionManager, userPreferences, lastResult);
             rl.prompt();
             return;
         }
         
         if (trimmedInput === 'config') {
-            await handleCommand('/settings', rl, config, themeManager, sessionManager, userPreferences, lastResult);
+            await handleCommand('/settings', config, themeManager, sessionManager, userPreferences, lastResult);
             rl.prompt();
             return;
         }
         
         if (trimmedInput === 'status') {
-            await handleCommand('/config', rl, config, themeManager, sessionManager, userPreferences, lastResult);
+            await handleCommand('/config', config, themeManager, sessionManager, userPreferences, lastResult);
             rl.prompt();
             return;
         }
@@ -222,4 +207,3 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
         process.exit(0);
     });
 }
-

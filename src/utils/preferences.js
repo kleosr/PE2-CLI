@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { SESSION_CONFIG, DEFAULT_CONFIG, UI_CONFIG } from '../constants.js';
-import { COMMANDS } from './validation.js';
 
 export class UserPreferences {
     constructor() {
@@ -16,8 +15,7 @@ export class UserPreferences {
             try {
                 const data = fs.readFileSync(this.prefsFile, 'utf-8');
                 return JSON.parse(data);
-            } catch (error) {
-                console.warn('Could not load preferences, using defaults');
+            } catch {
             }
         }
         
@@ -44,8 +42,7 @@ export class UserPreferences {
                 fs.mkdirSync(this.prefsDir, { recursive: true });
             }
             fs.writeFileSync(this.prefsFile, JSON.stringify(this.preferences, null, 2));
-        } catch (error) {
-            console.warn('Could not save preferences:', error.message);
+        } catch {
         }
     }
 
@@ -59,25 +56,23 @@ export class UserPreferences {
     }
 
     trackCommand(command) {
-        const lastUsed = this.preferences.lastUsedCommands || [];
-        const filtered = lastUsed.filter(cmd => cmd !== command);
-        this.preferences.lastUsedCommands = [command, ...filtered].slice(0, SESSION_CONFIG.maxLastUsedCommands);
+        const lastUsed = this.preferences.lastUsedCommands ?? [];
+        this.preferences.lastUsedCommands = [command, ...lastUsed.filter(cmd => cmd !== command)].slice(0, SESSION_CONFIG.maxLastUsedCommands);
         this.save();
     }
 
     addFavoriteModel(model) {
-        const favorites = this.preferences.favoriteModels || [];
+        const favorites = this.preferences.favoriteModels ?? [];
         if (!favorites.includes(model)) {
             this.preferences.favoriteModels = [model, ...favorites].slice(0, SESSION_CONFIG.maxFavoriteModels);
             this.save();
         }
     }
 
-    getPersonalizedSuggestions(limit = SESSION_CONFIG.commandSuggestionsLimit) {
-        const lastUsed = this.preferences.lastUsedCommands || [];
-        const allCommands = Object.keys(COMMANDS);
-        const suggestions = [...new Set([...lastUsed, ...allCommands])].slice(0, limit);
-        return suggestions;
+    async getPersonalizedSuggestions(limit = SESSION_CONFIG.commandSuggestionsLimit) {
+        const { COMMANDS } = await import('./validation.js');
+        const lastUsed = this.preferences.lastUsedCommands ?? [];
+        return [...new Set([...lastUsed, ...Object.keys(COMMANDS)])].slice(0, limit);
     }
 
     shouldUseCompactMode() {
@@ -89,4 +84,3 @@ export class UserPreferences {
         return this.preferences.showBorders && !this.shouldUseCompactMode();
     }
 }
-

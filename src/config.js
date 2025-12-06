@@ -1,7 +1,6 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import chalk from 'chalk';
 import { DEFAULT_CONFIG, FILE_PERMISSIONS } from './constants.js';
 
 export const CONFIG_DIR = path.join(os.homedir(), '.kleosr-pe2');
@@ -20,7 +19,6 @@ export function loadConfig() {
       const configData = fs.readFileSync(CONFIG_FILE, 'utf-8');
       return JSON.parse(configData);
     } catch (error) {
-      console.log(chalk.yellow('Warning: Could not load config file, using defaults.'));
       return {};
     }
   }
@@ -34,7 +32,6 @@ export function saveConfig(config) {
     fs.chmodSync(CONFIG_FILE, FILE_PERMISSIONS.configFile);
     return true;
   } catch (error) {
-    console.log(chalk.red(`❌ Error saving config: ${error.message}`));
     return false;
   }
 }
@@ -52,12 +49,9 @@ export const PROVIDER_ENV_VARS = {
 };
 
 export function resolveApiKey(provider, configApiKey) {
-  if (configApiKey && configApiKey.trim()) return configApiKey;
+  if (configApiKey?.trim()) return configApiKey;
   if (provider === 'ollama') {
-    return process.env[PROVIDER_ENV_VARS.ollama] || null;
+    return process.env[PROVIDER_ENV_VARS.ollama] ?? null;
   }
-  const envVar = PROVIDER_ENV_VARS[provider] || 'OPENROUTER_API_KEY';
-  return process.env[envVar] || null;
+  return process.env[PROVIDER_ENV_VARS[provider] ?? 'OPENROUTER_API_KEY'] ?? null;
 }
-
-

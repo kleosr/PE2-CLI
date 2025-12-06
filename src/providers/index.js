@@ -67,5 +67,3 @@ export function getProviderClient(provider, apiKey) {
       throw new Error(`Unsupported provider: ${provider}`);
   }
 }
-
-

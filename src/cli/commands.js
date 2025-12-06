@@ -1,20 +1,21 @@
 import fs from 'fs';
 import path from 'path';
 import inquirer from 'inquirer';
-import { setTerminalTitle, formatApiKeyDisplay, formatContentPreview, formatProcessingPromptDisplay, displayInteractiveBanner } from '../ui.js';
+import { setTerminalTitle, formatApiKeyDisplay, formatContentPreview, formatProcessingPromptDisplay, displayBanner } from '../ui.js';
 import { promptForConfig } from '../configPrompt.js';
 import { saveConfig } from '../config.js';
 import { PROVIDERS } from '../providers/index.js';
 import { PROMPT_LIMITS, UI_CONFIG } from '../constants.js';
-import { createTable, copyToClipboard, COMMANDS } from '../utils/index.js';
+import { createTable, copyToClipboard } from '../utils/display.js';
+import { COMMANDS } from '../utils/validation.js';
 
 const PROMPTS_DIR = path.join(process.cwd(), 'pe2-prompts');
 
-export async function handleCommand(command, rl, config, themeManager, sessionManager, userPreferences, lastResult) {
+export async function handleCommand(command, config, themeManager, sessionManager, userPreferences, lastResult) {
     switch (command) {
         case '/settings':
             setTerminalTitle('KleoSr PE2-CLI - Settings Configuration');
-            config = await promptForConfig(rl);
+            config = await promptForConfig();
             setTerminalTitle('KleoSr PE2-CLI - Interactive Mode');
             return config;
             
@@ -28,8 +29,8 @@ export async function handleCommand(command, rl, config, themeManager, sessionMa
             const configTable = createTable(
                 ['Setting', 'Value'],
                 [
-                    ['Provider', config.provider || 'Not set'],
-                    ['Model', config.model || 'Not set'],
+                    ['Provider', config.provider ?? 'Not set'],
+                    ['Model', config.model ?? 'Not set'],
                     [config.provider === 'ollama' ? 'Base URL' : 'API Key', formatApiKeyDisplay(config.apiKey)],
                     ['Theme', themeManager.currentTheme]
                 ],
@@ -110,9 +111,8 @@ export async function handleCommand(command, rl, config, themeManager, sessionMa
             break;
             
         case '/clear':
-            const { clearConsole } = await import('../ui.js');
-            clearConsole();
-            displayInteractiveBanner();
+            (await import('../ui.js')).clearConsole();
+            displayBanner({ themeManager, userPreferences, config, interactive: true });
             break;
             
         case '/history':
@@ -177,9 +177,9 @@ export async function handleCommand(command, rl, config, themeManager, sessionMa
                 ['Setting', 'Value'],
                 [
                     ['Theme', userPreferences.get('theme')],
-                    ['Compact Mode', userPreferences.get('compactMode') ? 'Yes' : 'No'],
-                    ['Show Borders', userPreferences.get('showBorders') ? 'Yes' : 'No'],
-                    ['Auto Save', userPreferences.get('autoSave') ? 'Yes' : 'No'],
+                    ['Compact Mode', userPreferences.get('compactMode') ?? false ? 'Yes' : 'No'],
+                    ['Show Borders', userPreferences.get('showBorders') ?? false ? 'Yes' : 'No'],
+                    ['Auto Save', userPreferences.get('autoSave') ?? false ? 'Yes' : 'No'],
                     ['Max History', userPreferences.get('maxHistoryItems')],
                     ['Default Provider', userPreferences.get('defaultProvider')]
                 ],
@@ -198,9 +198,8 @@ export async function handleCommand(command, rl, config, themeManager, sessionMa
             userPreferences.set('compactMode', !currentCompact);
             console.log(themeManager.color('success')(`✓ Compact mode ${!currentCompact ? 'enabled' : 'disabled'}`));
             
-            const { clearConsole: clearConsoleCompact } = await import('../ui.js');
-            clearConsoleCompact();
-            displayInteractiveBanner();
+            (await import('../ui.js')).clearConsole();
+            displayBanner({ themeManager, userPreferences, config, interactive: true });
             break;
             
         case '/batch':
@@ -290,4 +289,3 @@ export async function handleCommand(command, rl, config, themeManager, sessionMa
     
     return config;
 }
-

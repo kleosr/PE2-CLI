@@ -39,5 +39,3 @@ export function analyzePromptComplexity(rawPrompt) {
   const result = DIFFICULTY_LEVELS.find(difficulty => score <= difficulty.max);
   return { difficulty: result.level, iterations: result.iterations, score };
 }
-
-

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import readline from 'readline';
-import { SessionManager, ThemeManager, StatsTracker, UserPreferences } from '../utils/index.js';
+import { SessionManager } from '../utils/session.js';
+import { ThemeManager } from '../utils/theme.js';
+import { StatsTracker } from '../utils/stats.js';
+import { UserPreferences } from '../utils/preferences.js';
 import { setupGlobalErrorHandlers } from '../errorHandler.js';
 import { displayBanner, setTerminalTitle } from '../ui.js';
 import { loadConfig } from '../config.js';
@@ -13,7 +15,7 @@ const sessionManager = new SessionManager();
 const statsTracker = new StatsTracker();
 const userPreferences = new UserPreferences();
 
-setupGlobalErrorHandlers();
+setupGlobalErrorHandlers(themeManager);
 
 async function main() {
     setTerminalTitle('KleoSr PE2-CLI');
@@ -71,17 +73,11 @@ Input Methods:
 
     if (options.config) {
         setTerminalTitle('KleoSr PE2-CLI - Configuration');
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-        
         displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
-            console.log(themeManager.color('success')(`🔧 Configuration Mode | v3.4.5 | ${new Date().toLocaleString()}`));
+        console.log(themeManager.color('success')(`🔧 Configuration Mode | v3.4.5 | ${new Date().toLocaleString()}`));
         console.log(themeManager.color('primary')('='.repeat(78)));
-        
-        await promptForConfig(rl);
-        rl.close();
+
+        await promptForConfig();
         return;
     }
 
@@ -98,11 +94,4 @@ Input Methods:
     }
 }
 
-main().catch(error => {
-    console.error(themeManager.color('error')(`❌ Unexpected error: ${error.message}`));
-    if (error.stack && process.env.DEBUG) {
-        console.error(error.stack);
-    }
-    process.exit(1);
-});
-
+main();

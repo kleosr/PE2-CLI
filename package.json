@@ -7,8 +7,7 @@
     "pe2-cli": "src/cli/main.js"
   },
   "scripts": {
-    "start": "node ./src/cli.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node ./src/cli/main.js"
   },
   "keywords": [
     "pe2",
@@ -40,8 +39,5 @@
     "figlet": "^1.7.0",
     "inquirer": "^9.2.21",
     "openai": "^4.56.0"
-  },
-  "devDependencies": {
-    "@kleosr/pe2-cli": "^3.4.3"
   }
 }

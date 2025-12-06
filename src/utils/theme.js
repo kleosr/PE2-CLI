@@ -1,5 +1,4 @@
-import chalk from 'chalk';
-import { Chalk } from 'chalk';
+import chalk, { Chalk } from 'chalk';
 
 export class ThemeManager {
     constructor() {
@@ -72,4 +71,3 @@ export class ThemeManager {
         return this.chalkStderr.hex(this.colors.error)(str);
     }
 }
-

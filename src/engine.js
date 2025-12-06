@@ -1,19 +1,70 @@
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import { createProgressBar } from './utils/index.js';
+import { createProgressBar } from './utils/display.js';
 import { getInitialTemplate, getRefinementTemplate } from './templates.js';
 import { buildMessages } from './messages.js';
-import { analyzePromptComplexity } from './analysis.js';
 import { setTerminalTitle } from './ui.js';
 import { LLM_CONFIG, PROGRESS_PERCENTAGES, PERFORMANCE_METRICS, DEFAULT_EVALUATION, REQUIRED_PROMPT_FIELDS, HTTP_HEADERS } from './constants.js';
 
 const PROMPTS_DIR = path.join(process.cwd(), 'pe2-prompts');
 
-export async function generateInitialPrompt(client, rawPrompt, model) {
+const FALLBACK_PROMPT = {
+  context: 'No context provided',
+  role: 'Expert assistant',
+  task: 'Complete the requested task',
+  constraints: 'Follow best practices',
+  output: 'Provide appropriate output'
+};
+
+const DEFAULT_PROMPT = {
+  context: 'General purpose task',
+  role: 'Expert assistant with deep knowledge in the relevant domain',
+  task: "1. Understand the user's requirements\n2. Provide a comprehensive solution\n3. Ensure clarity and completeness",
+  constraints: '- Be accurate and thorough\n- Follow best practices\n- Provide clear explanations',
+  output: 'A well-structured response that fully addresses the user\'s needs'
+};
+
+function parsePromptResponse(content) {
   try {
-    const systemContent = LLM_CONFIG.systemMessage;
-    const userContent = getInitialTemplate(rawPrompt);
+    return { prompt: JSON.parse(content), edits: 'Prompt generation successful.' };
+  } catch {
+    const firstBrace = content.indexOf('{');
+    const lastBrace = content.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      let jsonStr = content.slice(firstBrace, lastBrace + 1);
+      jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const hasAll = REQUIRED_PROMPT_FIELDS.every(field => Object.prototype.hasOwnProperty.call(parsed, field));
+        if (hasAll) return { prompt: parsed, edits: 'Prompt generation with field validation.' };
+
+        return {
+          prompt: {
+            context: parsed.context || FALLBACK_PROMPT.context,
+            role: parsed.role || FALLBACK_PROMPT.role,
+            task: parsed.task || FALLBACK_PROMPT.task,
+            constraints: parsed.constraints || FALLBACK_PROMPT.constraints,
+            output: parsed.output || FALLBACK_PROMPT.output
+          },
+          edits: 'Prompt generation with field validation.'
+        };
+      } catch {}
+    }
+
+    return {
+      prompt: {
+        ...DEFAULT_PROMPT,
+        context: `The user wants to: ${rawPrompt.substring(0, 500)}${rawPrompt.length > 500 ? '...' : ''}`
+      },
+      edits: 'Prompt generation with automatic structuring.'
+    };
+  }
+}
+
+export async function generateInitialPrompt(client, rawPrompt, model) {
+  const systemContent = LLM_CONFIG.systemMessage;
+  const userContent = getInitialTemplate(rawPrompt);
     const response = await client.chat.completions.create({
       model,
       messages: buildMessages({ system: systemContent, user: userContent }),
@@ -21,50 +72,10 @@ export async function generateInitialPrompt(client, rawPrompt, model) {
       temperature: LLM_CONFIG.temperature
     });
     const content = response.choices[0].message.content;
-    try {
-      return { prompt: JSON.parse(content), edits: 'Initial prompt generation.' };
-    } catch {
-      const firstBrace = content.indexOf('{');
-      const lastBrace = content.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        let jsonStr = content.slice(firstBrace, lastBrace + 1);
-        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-        try {
-          const parsed = JSON.parse(jsonStr);
-          const hasAll = REQUIRED_PROMPT_FIELDS.every(field => Object.prototype.hasOwnProperty.call(parsed, field));
-          if (hasAll) return { prompt: parsed, edits: 'Initial prompt generation.' };
-          return {
-            prompt: {
-              context: parsed.context || 'No context provided',
-              role: parsed.role || 'Expert assistant',
-              task: parsed.task || 'Complete the requested task',
-              constraints: parsed.constraints || 'Follow best practices',
-              output: parsed.output || 'Provide appropriate output'
-            },
-            edits: 'Initial prompt generation with field validation.'
-          };
-        } catch {}
-      }
-      return {
-        prompt: {
-          context: `The user wants to: ${rawPrompt.substring(0, 500)}${rawPrompt.length > 500 ? '...' : ''}`,
-          role: 'Expert assistant with deep knowledge in the relevant domain',
-          task: "1. Understand the user's requirements\n2. Provide a comprehensive solution\n3. Ensure clarity and completeness",
-          constraints: '- Be accurate and thorough\n- Follow best practices\n- Provide clear explanations',
-          output: 'A well-structured response that fully addresses the user\'s needs'
-        },
-        edits: 'Initial prompt generation with automatic structuring.'
-      };
-    }
-  } catch (error) {
-    console.log(chalk.red(`❌ Error during initial prompt generation: ${error.message}`));
-    return { prompt: null, edits: null };
-  }
+    return parsePromptResponse(content);
 }
 
-export async function refinePrompt(client, currentPromptJson, refinementHistory, model, iterationNum, cache) {
-  const cached = cache?.get(currentPromptJson, iterationNum);
-  if (cached) return cached;
+export async function refinePrompt(client, currentPromptJson, refinementHistory, model, iterationNum) {
   try {
     const systemContent = LLM_CONFIG.refinementSystemMessage;
     const userContent = getRefinementTemplate(currentPromptJson, iterationNum);
@@ -77,35 +88,9 @@ export async function refinePrompt(client, currentPromptJson, refinementHistory,
       }
     });
     const content = response.choices[0].message.content;
-    try {
-      const refined = JSON.parse(content);
-      const result = { prompt: refined, edits: `Refined prompt based on PE2 principles (Iteration ${iterationNum}).` };
-      cache?.set(currentPromptJson, iterationNum, result);
-      return result;
-    } catch {
-      const firstBrace = content.indexOf('{');
-      const lastBrace = content.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        let jsonStr = content.slice(firstBrace, lastBrace + 1);
-        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-        const parsed = JSON.parse(jsonStr);
-        const hasAll = REQUIRED_PROMPT_FIELDS.every(field => Object.prototype.hasOwnProperty.call(parsed, field));
-        const prompt = hasAll
-          ? parsed
-          : {
-              context: parsed.context || 'No context provided',
-              role: parsed.role || 'Expert assistant',
-              task: parsed.task || 'Complete the requested task',
-              constraints: parsed.constraints || 'Follow best practices',
-              output: parsed.output || 'Provide appropriate output'
-            };
-        const result = { prompt, edits: 'Refined prompt generation.' };
-        cache?.set(currentPromptJson, iterationNum, result);
-        return result;
-      }
-      return { prompt: null, edits: null };
-    }
-  } catch (error) {
+    const result = parsePromptResponse(content);
+    return result.prompt ? { prompt: result.prompt, edits: `Refined prompt based on PE2 principles (Iteration ${iterationNum}).` } : { prompt: null, edits: null };
+  } catch {
     return { prompt: null, edits: null };
   }
 }
@@ -129,18 +114,14 @@ export async function processPrompt({
     const strategy = selectStrategy();
     console.log(themeManager.color('info')(`\n⚡ Processing Session ${sessionId} (${prompt.length} chars)...`));
 
+    const { analyzePromptComplexity } = await import('./analysis.js');
     const { difficulty, iterations: baseIterations, score: complexityScore } = analyzePromptComplexity(prompt);
     const cliIterations = config._cliOptions?.iterations;
     let recommendedIterations = Number.isInteger(cliIterations) && cliIterations > 0 ? cliIterations : baseIterations;
     if (!recommendedIterations) recommendedIterations = strategy.iterations || 2;
 
-    console.log(themeManager.color('info')('📊 Adaptive Analysis:'));
-    console.log(`   Domain: ${context.domain}`);
-    console.log(`   Difficulty: ${difficulty}`);
-    console.log(`   Score: ${complexityScore}/20`);
-    console.log(`   Iterations: ${recommendedIterations} (adapted for ${context.domain})`);
-    if (strategy.adaptiveFeatures.length > 0) console.log(`   Features: ${strategy.adaptiveFeatures.join(', ')}`);
-    console.log();
+    const { displayAdaptiveAnalysis } = await import('./ui.js');
+    displayAdaptiveAnalysis(themeManager, context, strategy, difficulty, complexityScore, recommendedIterations);
 
     progressBar = createProgressBar();
     progressBar.start(PROGRESS_PERCENTAGES.complete, PROGRESS_PERCENTAGES.initialization, { task: 'Initializing agentic processing...' });
@@ -150,24 +131,19 @@ export async function processPrompt({
     const { prompt: currentPrompt, edits: initialEdits } = await generateInitialPrompt(client, prompt, config.model);
     if (!currentPrompt) {
       if (progressBar) { progressBar.stop(); progressBar = null; }
-      console.log(themeManager.color('error')('✗ Failed to generate initial prompt.'));
       return { success: false };
     }
     refinementHistory.push({ iteration: 1, edits: initialEdits });
     let workingPrompt = currentPrompt;
     if (progressBar) progressBar.update(PROGRESS_PERCENTAGES.initialPromptComplete, { task: 'Initial prompt generated' });
 
-    const cache = {
-      get: (k, i) => null,
-      set: () => {}
-    };
     const progressRange = PROGRESS_PERCENTAGES.finalization - PROGRESS_PERCENTAGES.initialPromptComplete;
     const progressPerIteration = progressRange / recommendedIterations;
     for (let i = 0; i < recommendedIterations; i++) {
       const iterationNum = i + 2;
       if (progressBar) progressBar.update(PROGRESS_PERCENTAGES.initialPromptComplete + i * progressPerIteration, { task: `Adaptive refinement (${iterationNum}/${recommendedIterations + 1}) for ${context.domain}...` });
       const currentPromptJson = JSON.stringify(workingPrompt, null, 2);
-      const { prompt: refinedPrompt, edits } = await refinePrompt(client, currentPromptJson, refinementHistory, config.model, iterationNum, cache);
+      const { prompt: refinedPrompt, edits } = await refinePrompt(client, currentPromptJson, refinementHistory, config.model, iterationNum);
       if (!refinedPrompt) {
         console.log(themeManager.color('warning')(`\nRefinement ${iterationNum} failed, using previous version.`));
         break;
@@ -200,10 +176,7 @@ export async function processPrompt({
     return { success: true, outputFile };
   } catch (error) {
     if (progressBar) { progressBar.stop(); progressBar = null; }
-    console.log(chalk.red(`✗ Error: ${error.message}\n`));
     setTerminalTitle('KleoSr PE²-CLI - Interactive Mode');
-    return { success: false };
+    throw error;
   }
 }
-
-

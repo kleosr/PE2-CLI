@@ -4,5 +4,3 @@ export function buildMessages({ system, user }) {
   messages.push({ role: 'user', content: user });
   return messages;
 }
-
-

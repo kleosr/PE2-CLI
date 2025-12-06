@@ -1,28 +1,11 @@
 import inquirer from 'inquirer';
-import chalk from 'chalk';
 import { PROVIDERS } from './providers/index.js';
 import { CONFIG_FILE, saveConfig } from './config.js';
-import { ThemeManager } from './utils/index.js';
+import { ThemeManager } from './utils/theme.js';
 
 const themeManager = new ThemeManager();
 
-function handleExitPromptError(error) {
-  if (error instanceof Error && error.name === 'ExitPromptError') {
-    console.log(chalk.yellow('\n👋 Configuration cancelled.'));
-    return true;
-  }
-  return false;
-}
-
-process.on('uncaughtException', (error) => {
-  if (error instanceof Error && error.name === 'ExitPromptError') {
-    console.log(chalk.yellow('\n👋 Goodbye!'));
-    process.exit(0);
-  }
-  throw error;
-});
-
-export async function promptForConfig(rl) {
+export async function promptForConfig() {
   console.log(themeManager.color('warning')('\n🔧 Configuration Setup'));
   console.log(themeManager.color('info')("Let's configure your AI provider and API settings.\n"));
 
@@ -130,7 +113,8 @@ export async function promptForConfig(rl) {
       return null;
     }
   } catch (error) {
-    if (handleExitPromptError(error)) {
+    if (error instanceof Error && error.name === 'ExitPromptError') {
+      console.log('\n👋 Configuration cancelled.');
       return null;
     }
     if (error.isTtyError) {
@@ -142,5 +126,3 @@ export async function promptForConfig(rl) {
     return null;
   }
 }
-
-

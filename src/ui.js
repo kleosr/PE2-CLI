@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import figlet from 'figlet';
-import { displayStatusBar, createTable } from './utils/index.js';
+import { displayStatusBar, createTable } from './utils/display.js';
 import { UI_CONFIG, PROMPT_LIMITS } from './constants.js';
 
 export function clearConsole() {
@@ -59,9 +59,6 @@ export function displayBanner({ themeManager, userPreferences, config, interacti
   console.log();
 }
 
-export function displayInteractiveBanner({ themeManager, userPreferences, config }) {
-  displayBanner({ themeManager, userPreferences, config, interactive: true });
-}
 
 export function formatApiKeyDisplay(apiKey, showFullKey = false) {
   if (!apiKey) return 'Not set';
@@ -74,24 +71,22 @@ export function formatApiKeyDisplay(apiKey, showFullKey = false) {
   return apiKey.substring(0, apiKeyDisplayLength) + '•'.repeat(apiKeyMaskLength) + apiKey.substring(keyLength - shortApiKeySuffix);
 }
 
-export function formatContentPreview(content, maxLength = PROMPT_LIMITS.previewMaxLength, showFullLength = false) {
-  if (!content) return '';
-  if (content.length <= maxLength || showFullLength) return content;
-  const truncated = content.substring(0, maxLength);
+function truncateText(text, maxLength, suffix = '...') {
+  if (!text || text.length <= maxLength) return text;
+  const truncated = text.substring(0, maxLength);
   const lastSpace = truncated.lastIndexOf(' ');
-  const truncationThreshold = 0.7;
-  const cleanTruncated = lastSpace > maxLength * truncationThreshold ? truncated.substring(0, lastSpace) : truncated;
-  return `${cleanTruncated}... [${content.length - cleanTruncated.length} more characters]`;
+  const cleanTruncated = lastSpace > maxLength * 0.7 ? truncated.substring(0, lastSpace) : truncated;
+  return `${cleanTruncated}${suffix}`;
+}
+
+export function formatContentPreview(content, maxLength = PROMPT_LIMITS.previewMaxLength, showFullLength = false) {
+  if (!content || showFullLength) return content;
+  const truncated = truncateText(content, maxLength);
+  return `${truncated}... [${content.length - truncated.length} more characters]`;
 }
 
 export function formatProcessingPromptDisplay(prompt, maxLength = PROMPT_LIMITS.processingDisplayMaxLength) {
-  if (!prompt) return '';
-  if (prompt.length <= maxLength) return prompt;
-  const truncated = prompt.substring(0, maxLength);
-  const lastSpace = truncated.lastIndexOf(' ');
-  const truncationThreshold = 0.7;
-  const cleanTruncated = lastSpace > maxLength * truncationThreshold ? truncated.substring(0, lastSpace) : truncated;
-  return `${cleanTruncated}... [${prompt.length} chars total]`;
+  return truncateText(prompt, maxLength, `... [${prompt?.length || 0} chars total]`);
 }
 
 export const DIFFICULTY_INDICATORS = {
@@ -102,21 +97,25 @@ export const DIFFICULTY_INDICATORS = {
   MASTER: '🟣'
 };
 
+function getScoreDisplay(score, maxScore = 20) {
+  const scoreBar = '█'.repeat(Math.floor((score / maxScore) * 20)) + '░'.repeat(20 - Math.floor((score / maxScore) * 20));
+  const scoreColor = score <= 4 ? 'success' : score <= 8 ? 'warning' : score <= 12 ? 'secondary' : 'error';
+  return { scoreBar, scoreColor };
+}
+
 export function displayComplexityAnalysis({ themeManager }, difficulty, iterations, score, rawPrompt) {
   const indicator = DIFFICULTY_INDICATORS[difficulty];
   const terminalWidth = Math.min(process.stdout.columns || UI_CONFIG.terminalWidth.default, UI_CONFIG.terminalWidth.max);
   const separatorLength = Math.min(UI_CONFIG.separator.defaultLength, terminalWidth - 10);
   const wordCount = rawPrompt.split(/\s+/).length;
-  
+  const { scoreBar, scoreColor } = getScoreDisplay(score);
+
   console.log();
   console.log(themeManager.color('info')('╔' + '═'.repeat(separatorLength - 2) + '╗'));
   console.log(themeManager.color('info')('║' + ' '.repeat(Math.floor((separatorLength - 30) / 2)) + '🔍 PROMPT COMPLEXITY ANALYSIS' + ' '.repeat(Math.ceil((separatorLength - 30) / 2)) + '║'));
   console.log(themeManager.color('info')('╚' + '═'.repeat(separatorLength - 2) + '╝'));
   console.log();
-  
-  const scoreBar = '█'.repeat(Math.floor((score / 20) * 20)) + '░'.repeat(20 - Math.floor((score / 20) * 20));
-  const scoreColor = score <= 4 ? 'success' : score <= 8 ? 'warning' : score <= 12 ? 'secondary' : score <= 16 ? 'error' : 'error';
-  
+
   console.log(themeManager.color('text')('  📊 Complexity Score:'), themeManager.color(scoreColor)(`${score}/20`));
   console.log(themeManager.color('muted')(`    ${scoreBar}`));
   console.log(themeManager.color('text')(`  🎚️  Difficulty Level: ${indicator} ${difficulty}`));
@@ -126,4 +125,19 @@ export function displayComplexityAnalysis({ themeManager }, difficulty, iteratio
   console.log(themeManager.color('muted')('─'.repeat(separatorLength)));
 }
 
-
+export function displayAdaptiveAnalysis(themeManager, context, strategy, difficulty, complexityScore, recommendedIterations, maxScore = 20) {
+  const { scoreBar, scoreColor } = getScoreDisplay(complexityScore, maxScore);
+  
+  console.log(themeManager.color('info')('  📊 Adaptive Analysis:'));
+  console.log(themeManager.color('muted')('  ──────────────────────────────────────────────'));
+  console.log(`     ${themeManager.color('text')('Domain')}: ${themeManager.color('primary')(context.domain)}`);
+  console.log(`     ${themeManager.color('text')('Difficulty')}: ${DIFFICULTY_INDICATORS[difficulty]} ${themeManager.color('info')(difficulty)}`);
+  console.log(`     ${themeManager.color('text')('Score')}: ${themeManager.color(scoreColor)(`${complexityScore}/${maxScore}`)}`);
+  console.log(themeManager.color('muted')(`     ${scoreBar}`));
+  console.log(`     ${themeManager.color('text')('Iterations')}: ${themeManager.color('primary')(recommendedIterations)} ${themeManager.color('muted')(`(adapted for ${context.domain})`)}`);
+  if (strategy.adaptiveFeatures.length > 0) {
+    console.log(`     ${themeManager.color('text')('Features')}: ${themeManager.color('info')(strategy.adaptiveFeatures.join(', '))}`);
+  }
+  console.log(themeManager.color('muted')('  ──────────────────────────────────────────────'));
+  console.log();
+}
