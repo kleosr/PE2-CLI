@@ -1,11 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import inquirer from 'inquirer';
-import { setTerminalTitle, formatApiKeyDisplay, formatContentPreview, formatProcessingPromptDisplay, displayBanner } from '../ui.js';
+import { clearConsole, setTerminalTitle, formatApiKeyDisplay, formatContentPreview, formatProcessingPromptDisplay, displayBanner } from '../ui.js';
 import { promptForConfig } from '../configPrompt.js';
 import { saveConfig } from '../config.js';
 import { PROVIDERS } from '../providers/index.js';
-import { PROMPT_LIMITS, UI_CONFIG } from '../constants.js';
+import { UI_CONFIG } from '../constants.js';
 import { createTable, copyToClipboard } from '../utils/display.js';
 import { COMMANDS } from '../utils/validation.js';
 
@@ -47,7 +47,7 @@ export async function handleCommand(command, config, themeManager, sessionManage
                 console.log(themeManager.color('warning')('\n⚠️  No API key configured. Use /settings to configure.'));
             }
             setTerminalTitle('KleoSr PE2-CLI - Interactive Mode');
-            break;
+            return;
             
         case '/model':
             process.stdout.write('\r\x1b[K');
@@ -108,12 +108,12 @@ export async function handleCommand(command, config, themeManager, sessionManage
             } else {
                 console.log(themeManager.color('warning')('No API key configured.'));
             }
-            break;
+            return;
             
         case '/clear':
-            (await import('../ui.js')).clearConsole();
+            clearConsole();
             displayBanner({ themeManager, userPreferences, config, interactive: true });
-            break;
+            return;
             
         case '/history':
             const sessions = sessionManager.loadHistory();
@@ -126,13 +126,13 @@ export async function handleCommand(command, config, themeManager, sessionManage
                     console.log(`   Prompts: ${session.prompts.length}`);
                 });
             }
-            break;
+            return;
             
         case '/export':
             const exportPath = path.join(process.cwd(), `pe2-export-${Date.now()}.json`);
             fs.writeFileSync(exportPath, JSON.stringify(sessionManager.currentSession, null, 2));
             console.log(themeManager.color('success')(`✓ Session exported to: ${exportPath}`));
-            break;
+            return;
             
         case '/import':
             const { importPath } = await inquirer.prompt([
@@ -157,7 +157,7 @@ export async function handleCommand(command, config, themeManager, sessionManage
             } catch (error) {
                 console.log(themeManager.color('error')(`✗ Import failed: ${error.message}`));
             }
-            break;
+            return;
             
         case '/theme':
             const newTheme = themeManager.currentTheme === 'dark' ? 'light' : 'dark';
@@ -191,16 +191,16 @@ export async function handleCommand(command, config, themeManager, sessionManage
             console.log(themeManager.color('muted')('  • Use /theme to toggle theme'));
             console.log(themeManager.color('muted')('  • Use /compact to toggle compact mode'));
             console.log(themeManager.color('muted')('  • Preferences auto-save when changed'));
-            break;
+            return;
             
         case '/compact':
             const currentCompact = userPreferences.get('compactMode');
             userPreferences.set('compactMode', !currentCompact);
             console.log(themeManager.color('success')(`✓ Compact mode ${!currentCompact ? 'enabled' : 'disabled'}`));
             
-            (await import('../ui.js')).clearConsole();
+            clearConsole();
             displayBanner({ themeManager, userPreferences, config, interactive: true });
-            break;
+            return;
             
         case '/batch':
             const { batchPath } = await inquirer.prompt([
@@ -242,7 +242,7 @@ export async function handleCommand(command, config, themeManager, sessionManage
             } else {
                 console.log(themeManager.color('warning')('No result to copy.'));
             }
-            break;
+            return;
 
         case '/clearall':
             if (fs.existsSync(PROMPTS_DIR)) {
@@ -253,7 +253,7 @@ export async function handleCommand(command, config, themeManager, sessionManage
             } else {
                 console.log(themeManager.color('warning')('No prompts folder to clear.'));
             }
-            break;
+            return;
             
         case '/help':
         default:
@@ -284,8 +284,6 @@ export async function handleCommand(command, config, themeManager, sessionManage
             console.log(themeManager.color('muted')('    • Use /exit or /quit to leave'));
             console.log(themeManager.color('muted')('    • Results are auto-saved to pe2-prompts/'));
             console.log(separator);
-            break;
+            return;
     }
-    
-    return config;
 }

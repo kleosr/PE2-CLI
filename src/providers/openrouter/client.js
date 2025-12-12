@@ -1,3 +1,5 @@
+import { HTTP_HEADERS } from '../../constants.js';
+
 export function createOpenRouterClient({ apiKey, baseURL = 'https://openrouter.ai/api/v1' }) {
     if (!apiKey?.trim()) {
         throw new Error('OpenRouter API key is required');
@@ -12,8 +14,9 @@ export function createOpenRouterClient({ apiKey, baseURL = 'https://openrouter.a
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${apiKey}`,
-                            'HTTP-Referer': 'https://pe2-cli-tool.local',
-                            'X-Title': 'KleoSr PE2-CLI Tool'
+                            'HTTP-Referer': HTTP_HEADERS.referer,
+                            'X-Title': HTTP_HEADERS.title,
+                            ...(options.headers ?? {})
                         },
                         body: JSON.stringify({
                             model: options.model,
@@ -28,10 +31,10 @@ export function createOpenRouterClient({ apiKey, baseURL = 'https://openrouter.a
                         throw new Error(`OpenRouter error: ${response.status}`);
                     }
 
-                    const data = await response.json();
-                    return data;
+                    const completion = await response.json();
+                    return completion;
                 }
             }
         }
     };
-} 
+}

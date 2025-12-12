@@ -57,6 +57,14 @@ export const DIFFICULTY_LEVELS = [
   { max: Infinity, level: 'MASTER', iterations: 5 }
 ];
 
+export const DIFFICULTY_INDICATORS = {
+  NOVICE: '🟢',
+  INTERMEDIATE: '🟡',
+  ADVANCED: '🟠',
+  EXPERT: '🔴',
+  MASTER: '🟣'
+};
+
 export const PROGRESS_BAR_CONFIG = {
   format: ' {bar} | {percentage}% | {task}',
   barCompleteChar: '█',

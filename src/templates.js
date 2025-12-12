@@ -1,4 +1,4 @@
-import { DIFFICULTY_INDICATORS } from './ui.js';
+import { DIFFICULTY_INDICATORS } from './constants.js';
 
 export const getInitialTemplate = (rawPrompt) => `
 You are an expert prompt engineer specializing in PE² (Prompt Engineering 2.0) optimization.

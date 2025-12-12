@@ -1,15 +1,12 @@
 import fs from 'fs';
-import { setTerminalTitle, DIFFICULTY_INDICATORS } from '../ui.js';
+import { displayAdaptiveAnalysis, setTerminalTitle } from '../ui.js';
 import { processPrompt as runEngine } from '../engine.js';
 import { analyzePromptComplexity } from '../analysis.js';
 import { validatePrompt } from '../utils/validation.js';
 import { handleError, ValidationError } from '../errorHandler.js';
-import { DEFAULT_CONTEXT, DEFAULT_STRATEGY, PERFORMANCE_METRICS } from '../constants.js';
+import { DEFAULT_CONTEXT, DEFAULT_STRATEGY, DIFFICULTY_INDICATORS, PERFORMANCE_METRICS } from '../constants.js';
 
-export const getContext = () => DEFAULT_CONTEXT;
-export const selectStrategy = () => DEFAULT_STRATEGY;
-
-export async function processPrompt(prompt, client, config, sessionId, themeManager, statsTracker, userPreferences, lastResult) {
+export async function processPrompt(prompt, client, config, sessionId, themeManager, statsTracker, lastResult) {
     try {
         setTerminalTitle(`KleoSr PE2-CLI - Processing Session ${sessionId}`);
         
@@ -18,8 +15,8 @@ export async function processPrompt(prompt, client, config, sessionId, themeMana
             throw new ValidationError(validationError);
         }
 
-        const context = getContext();
-        const strategy = selectStrategy();
+        const context = { ...DEFAULT_CONTEXT };
+        const strategy = { ...DEFAULT_STRATEGY };
         
         console.log();
         console.log(themeManager.color('info')('╔' + '═'.repeat(58) + '╗'));
@@ -30,22 +27,24 @@ export async function processPrompt(prompt, client, config, sessionId, themeMana
         const { difficulty, iterations: baseIterations, score: complexityScore } = analyzePromptComplexity(prompt);
         
         const cliIterations = config._cliOptions?.iterations;
-        let recommendedIterations = Number.isInteger(cliIterations) && cliIterations > 0 ? cliIterations : baseIterations;
-        if (!recommendedIterations) recommendedIterations = strategy.iterations || 2;
-        
-        const { displayAdaptiveAnalysis } = await import('../ui.js');
-        displayAdaptiveAnalysis(themeManager, context, strategy, difficulty, complexityScore, recommendedIterations, PERFORMANCE_METRICS.complexityScoreMax);
+        const iterations = Number.isInteger(cliIterations) && cliIterations > 0
+            ? cliIterations
+            : (baseIterations || strategy.iterations || 2);
+
+        displayAdaptiveAnalysis(themeManager, context, strategy, difficulty, complexityScore, iterations, PERFORMANCE_METRICS.complexityScoreMax);
         
         const result = await runEngine({
             prompt,
             client,
             config,
+            context,
+            strategy,
+            difficulty,
+            complexityScore,
+            iterations,
             sessionId,
             themeManager,
-            statsTracker,
-            userPreferences,
-            getContext,
-            selectStrategy
+            statsTracker
         });
         
         if (!result.success) {

@@ -1,14 +1,12 @@
 const ERROR_CODES = {
-  CLI_ERROR: { exitCode: 1, description: 'General CLI error' },
-  VALIDATION_ERROR: { exitCode: 2, description: 'Input validation failed' },
-  CONFIG_ERROR: { exitCode: 3, description: 'Configuration error' },
-  PROVIDER_ERROR: { exitCode: 4, description: 'Provider-specific error' },
-  NETWORK_ERROR: { exitCode: 5, description: 'Network-related error' },
-  AUTH_ERROR: { exitCode: 6, description: 'Authentication error' },
-  RUNTIME_ERROR: { exitCode: 7, description: 'Runtime error' }
+  CLI_ERROR: { exitCode: 1 },
+  VALIDATION_ERROR: { exitCode: 2 },
+  CONFIG_ERROR: { exitCode: 3 },
+  PROVIDER_ERROR: { exitCode: 4 },
+  NETWORK_ERROR: { exitCode: 5 },
+  AUTH_ERROR: { exitCode: 6 },
+  RUNTIME_ERROR: { exitCode: 7 }
 };
-
-const getFormatter = (themeManager, type) => themeManager.color(type);
 
 export class CLIError extends Error {
   constructor(message, code = 'CLI_ERROR', exitCode = ERROR_CODES.CLI_ERROR.exitCode, details = {}) {
@@ -17,7 +15,6 @@ export class CLIError extends Error {
     this.code = code;
     this.exitCode = exitCode;
     this.details = details;
-    this.timestamp = new Date().toISOString();
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
     }
@@ -47,9 +44,9 @@ export class ProviderError extends CLIError {
 }
 
 export function handleError(error, themeManager, { isDebug = process.env.DEBUG } = {}) {
-  const formatError = getFormatter(themeManager, 'error');
-  const formatWarning = getFormatter(themeManager, 'warning');
-  const formatMuted = getFormatter(themeManager, 'muted');
+  const formatError = themeManager.color('error');
+  const formatWarning = themeManager.color('warning');
+  const formatMuted = themeManager.color('muted');
 
   if (error instanceof CLIError) {
     console.error(formatError(`✗ [${error.constructor.name}] ${error.message}`));

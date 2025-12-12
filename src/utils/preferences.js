@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { SESSION_CONFIG, DEFAULT_CONFIG, UI_CONFIG } from '../constants.js';
+import { COMMANDS } from './validation.js';
 
 export class UserPreferences {
     constructor() {
@@ -69,8 +70,7 @@ export class UserPreferences {
         }
     }
 
-    async getPersonalizedSuggestions(limit = SESSION_CONFIG.commandSuggestionsLimit) {
-        const { COMMANDS } = await import('./validation.js');
+    getPersonalizedSuggestions(limit = SESSION_CONFIG.commandSuggestionsLimit) {
         const lastUsed = this.preferences.lastUsedCommands ?? [];
         return [...new Set([...lastUsed, ...Object.keys(COMMANDS)])].slice(0, limit);
     }

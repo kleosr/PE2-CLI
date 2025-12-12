@@ -7,23 +7,33 @@ export function createGoogleClient(apiKey) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
+    const roleLabels = {
+        system: 'System',
+        user: 'User',
+        assistant: 'Assistant'
+    };
+
     return {
         chat: {
             completions: {
-                create: async (opts) => {
-                    const model = genAI.getGenerativeModel({ model: opts.model });
-                    const result = await model.generateContent(opts.messages[opts.messages.length - 1].content);
+                create: async (options) => {
+                    const model = genAI.getGenerativeModel({ model: options.model });
+                    const prompt = (options.messages ?? [])
+                        .map(m => `${roleLabels[m.role] ?? 'User'}: ${m.content}`)
+                        .join('\n');
+
+                    const generation = await model.generateContent(prompt);
 
                     return {
                         choices: [{
                             message: {
-                                content: result.response.text(),
+                                content: generation.response.text(),
                                 role: 'assistant'
                             },
                             finish_reason: 'stop'
                         }],
-                        usage: result.response.usageMetadata || {},
-                        model: opts.model
+                        usage: generation.response.usageMetadata || {},
+                        model: options.model
                     };
                 }
             }

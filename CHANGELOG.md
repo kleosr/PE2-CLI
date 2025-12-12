@@ -1,4 +1,4 @@
-Released 3.4.5 | *Code quality improvements and slop elimination*
+Released 3.4.6 | *Code quality improvements and slop elimination*
 
 - Refactor: Simplified over-engineered provider clients by removing excessive validation and error handling in OpenAI, Anthropic, Google, and OpenRouter modules
 - Refactor: Extracted duplicate JSON parsing logic into reusable `parsePromptResponse` helper in engine module
@@ -14,4 +14,4 @@ Released 3.4.5 | *Code quality improvements and slop elimination*
 - Fix: Deleted dead `lib/llm.js` file containing unused error classes and validation utilities
 - UX: Improved code clarity and maintainability through systematic slop elimination across all modules
 
-chore: update package-lock.json and package.json for @kleosr/pe2-cli v3.4.5, refactor CLI entry point, and clean up unused code in various modules
+chore: update package-lock.json and package.json for @kleosr/pe2-cli v3.4.6, refactor CLI entry point, and clean up unused code in various modules

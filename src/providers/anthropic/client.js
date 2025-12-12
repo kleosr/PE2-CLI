@@ -10,24 +10,44 @@ export function createAnthropicClient(apiKey) {
     return {
         chat: {
             completions: {
-                create: (params) => client.messages.create({
-                    model: params.model,
-                    messages: params.messages.filter(m => m.role !== 'system'),
-                    system: params.messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n') || undefined,
-                    max_tokens: params.max_tokens || 2048,
-                    temperature: params.temperature,
-                    stream: params.stream
-                }).then(response => ({
-                    choices: [{
-                        message: {
-                            content: response.content.filter(block => block.type === 'text').map(block => block.text).join(''),
-                            role: 'assistant'
-                        },
-                        finish_reason: response.stop_reason || 'stop'
-                    }],
-                    usage: response.usage,
-                    model: response.model
-                }))
+                create: async (options) => {
+                    const messages = [];
+                    const systemParts = [];
+
+                    for (const message of options.messages ?? []) {
+                        if (message.role === 'system') {
+                            systemParts.push(message.content);
+                            continue;
+                        }
+                        messages.push(message);
+                    }
+
+                    const response = await client.messages.create({
+                        model: options.model,
+                        messages,
+                        system: systemParts.length ? systemParts.join('\n\n') : undefined,
+                        max_tokens: options.max_tokens || 2048,
+                        temperature: options.temperature,
+                        stream: options.stream
+                    });
+
+                    const content = (response.content ?? [])
+                        .filter(block => block.type === 'text')
+                        .map(block => block.text)
+                        .join('');
+
+                    return {
+                        choices: [{
+                            message: {
+                                content,
+                                role: 'assistant'
+                            },
+                            finish_reason: response.stop_reason || 'stop'
+                        }],
+                        usage: response.usage,
+                        model: response.model
+                    };
+                }
             }
         }
     };

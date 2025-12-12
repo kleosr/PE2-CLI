@@ -11,12 +11,29 @@ import { ConfigError } from '../errorHandler.js';
 import { handleCommand } from './commands.js';
 import { processPrompt } from './promptProcessing.js';
 
+function resolveInputPrompt(initialInput, cliOptions) {
+    if (!initialInput) return { prompt: null, source: null };
+    if (cliOptions.text) return { prompt: initialInput, source: 'direct text' };
+
+    const exists = fs.existsSync(initialInput);
+    if (cliOptions.file) {
+        if (!exists) return { prompt: null, source: `file: ${initialInput}`, error: `❌ Error: File not found at ${initialInput}` };
+        return { prompt: fs.readFileSync(initialInput, 'utf-8').trim(), source: `file: ${initialInput}` };
+    }
+
+    if (!exists) return { prompt: initialInput, source: 'direct text' };
+    return { prompt: fs.readFileSync(initialInput, 'utf-8').trim(), source: `file: ${initialInput}` };
+}
+
 export async function interactiveMode(initialInput, cliOptions, themeManager, sessionManager, statsTracker, userPreferences) {
     if (initialInput && cliOptions.autoDifficulty) {
-        let rawPrompt = initialInput;
-        if (!cliOptions.text && !cliOptions.file && fs.existsSync(initialInput)) {
-            rawPrompt = fs.readFileSync(initialInput, 'utf-8').trim();
+        const { prompt, error } = resolveInputPrompt(initialInput, cliOptions);
+        if (error) {
+            console.log(themeManager.color('error')(error));
+            return;
         }
+
+        const rawPrompt = prompt;
         const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(rawPrompt);
         displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
         console.log(themeManager.color('info')(`📝 Input: ${formatProcessingPromptDisplay(rawPrompt, PROMPT_LIMITS.processingDisplayMaxLength)}`));
@@ -82,32 +99,26 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
     let lastResult = null;
 
     if (initialInput) {
-        let rawPrompt = initialInput;
-        let inputSource = 'direct text';
-
-        if (!cliOptions.text && !cliOptions.file && fs.existsSync(initialInput)) {
-            rawPrompt = fs.readFileSync(initialInput, 'utf-8').trim();
-            inputSource = `file: ${initialInput}`;
-        } else if (cliOptions.file) {
-            if (fs.existsSync(initialInput)) {
-                rawPrompt = fs.readFileSync(initialInput, 'utf-8').trim();
-                inputSource = `file: ${initialInput}`;
-            } else {
-                console.log(themeManager.color('error')(`❌ Error: File not found at ${initialInput}`));
+        const { prompt, source, error } = resolveInputPrompt(initialInput, cliOptions);
+        if (error) {
+            console.log(themeManager.color('error')(error));
+            if (!cliOptions.interactive) {
+                rl.close();
+                return;
             }
         }
 
-        if (rawPrompt) {
-            console.log(themeManager.color('info')(`📝 Initial input: ${inputSource}`));
-            const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(rawPrompt);
-            displayComplexityAnalysis({ themeManager }, difficulty, recIter, compScore, rawPrompt);
+        if (prompt) {
+            console.log(themeManager.color('info')(`📝 Initial input: ${source}`));
+            const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(prompt);
+            displayComplexityAnalysis({ themeManager }, difficulty, recIter, compScore, prompt);
 
             if (cliOptions.autoDifficulty) {
                 rl.close();
                 return;
             }
 
-            const result = await processPrompt(rawPrompt, client, { ...config, _cliOptions: cliOptions }, sessionCounter++, themeManager, statsTracker, userPreferences, lastResult);
+            const result = await processPrompt(prompt, client, { ...config, _cliOptions: cliOptions }, sessionCounter++, themeManager, statsTracker, lastResult);
             if (result) lastResult = result.lastResult;
             
             if (!cliOptions.interactive) {
@@ -152,21 +163,21 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
             
             const result = await handleCommand(command, config, themeManager, sessionManager, userPreferences, lastResult);
             
-            if (result && typeof result === 'object') {
+            if (result?.batch) {
+                for (const prompt of result.batch) {
+                    console.log(`\n${themeManager.color('info')('Processing prompt:')} ${formatProcessingPromptDisplay(prompt, 80)}`);
+                    const processResult = await processPrompt(prompt, client, config, sessionCounter++, themeManager, statsTracker, lastResult);
+                    if (processResult) lastResult = processResult.lastResult;
+                }
+            } else if (result && typeof result === 'object') {
                 config = { ...config, ...result };
                 if (result.provider || result.apiKey) {
                     client = getProviderClient(config.provider || 'openrouter', resolveApiKey(config.provider, config.apiKey));
                 }
                 displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: true });
             } else if (typeof result === 'string') {
-                const processResult = await processPrompt(result, client, config, sessionCounter++, themeManager, statsTracker, userPreferences, lastResult);
+                const processResult = await processPrompt(result, client, config, sessionCounter++, themeManager, statsTracker, lastResult);
                 if (processResult) lastResult = processResult.lastResult;
-            } else if (result?.batch) {
-                for (const prompt of result.batch) {
-                    console.log(`\n${themeManager.color('info')('Processing prompt:')} ${formatProcessingPromptDisplay(prompt, 80)}`);
-                    const processResult = await processPrompt(prompt, client, config, sessionCounter++, themeManager, statsTracker, userPreferences, lastResult);
-                    if (processResult) lastResult = processResult.lastResult;
-                }
             }
             
             rl.prompt();
@@ -197,7 +208,7 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
             return;
         }
         
-        const processResult = await processPrompt(trimmedInput, client, config, sessionCounter++, themeManager, statsTracker, userPreferences, lastResult);
+        const processResult = await processPrompt(trimmedInput, client, config, sessionCounter++, themeManager, statsTracker, lastResult);
         if (processResult) lastResult = processResult.lastResult;
         rl.prompt();
     });

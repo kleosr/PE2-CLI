@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { HTTP_HEADERS } from '../../constants.js';
 
 export function createOpenAIClient(apiKey, baseURL = 'https://api.openai.com/v1') {
     if (!apiKey?.trim()) {
@@ -9,8 +10,8 @@ export function createOpenAIClient(apiKey, baseURL = 'https://api.openai.com/v1'
         apiKey,
         baseURL,
         defaultHeaders: {
-            'HTTP-Referer': 'https://pe2-cli-tool.local',
-            'X-Title': 'KleoSr PE2-CLI Tool'
+            'HTTP-Referer': HTTP_HEADERS.referer,
+            'X-Title': HTTP_HEADERS.title
         }
     });
 } 

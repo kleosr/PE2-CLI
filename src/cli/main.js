@@ -24,7 +24,7 @@ async function main() {
     program
         .name('pe2-cli')
         .description('🚀 KleoSr PE2-CLI: Convert raw prompts to PE2-optimized prompts using adaptive intelligence.')
-        .version('3.4.5')
+        .version('3.4.6')
         .argument('[input]', 'Text prompt or path to file (optional - if not provided, starts interactive mode)')
         .option('--model <model>', 'OpenRouter model name (overrides config)')
         .option('--iterations <number>', 'Number of PE2 refinement rounds (auto-detected if not specified)', parseInt)
@@ -71,17 +71,17 @@ Input Methods:
         const options = program.opts();
         const input = program.args[0];
 
-    if (options.config) {
-        setTerminalTitle('KleoSr PE2-CLI - Configuration');
-        displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
-        console.log(themeManager.color('success')(`🔧 Configuration Mode | v3.4.5 | ${new Date().toLocaleString()}`));
-        console.log(themeManager.color('primary')('='.repeat(78)));
+        if (options.config) {
+            setTerminalTitle('KleoSr PE2-CLI - Configuration');
+            displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
+            console.log(themeManager.color('success')(`🔧 Configuration Mode | v3.4.6 | ${new Date().toLocaleString()}`));
+            console.log(themeManager.color('primary')('='.repeat(78)));
 
-        await promptForConfig();
-        return;
-    }
+            await promptForConfig();
+            return;
+        }
 
-    await interactiveMode(input, options, themeManager, sessionManager, statsTracker, userPreferences);
+        await interactiveMode(input, options, themeManager, sessionManager, statsTracker, userPreferences);
     } catch (error) {
         if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') {
             return;

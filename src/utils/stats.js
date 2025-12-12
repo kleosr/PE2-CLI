@@ -4,7 +4,8 @@ import os from 'os';
 
 export class StatsTracker {
     constructor() {
-        this.statsFile = path.join(os.homedir(), '.kleosr-pe2', 'stats.json');
+        this.statsDir = path.join(os.homedir(), '.kleosr-pe2');
+        this.statsFile = path.join(this.statsDir, 'stats.json');
         this.stats = this.load();
     }
 
@@ -22,6 +23,9 @@ export class StatsTracker {
     }
 
     save() {
+        if (!fs.existsSync(this.statsDir)) {
+            fs.mkdirSync(this.statsDir, { recursive: true });
+        }
         fs.writeFileSync(this.statsFile, JSON.stringify(this.stats, null, 2));
     }
 
