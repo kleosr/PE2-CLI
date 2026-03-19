@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { writeJsonFileAtomically } from './writeJsonFileAtomically.js';
 
 export class SessionManager {
     constructor() {
@@ -35,7 +36,7 @@ export class SessionManager {
     save() {
         const filename = `session-${this.currentSession.id}.json`;
         const filepath = path.join(this.sessionDir, filename);
-        fs.writeFileSync(filepath, JSON.stringify(this.currentSession, null, 2));
+        writeJsonFileAtomically(filepath, this.currentSession);
     }
 
     loadHistory() {

@@ -51,34 +51,16 @@ export function validateAndSuggestCommand(input) {
     }
     
     const suggestions = getCommandSuggestions(command, 3);
-    
-        return {
-            valid: false,
-            isCommand: true,
-            command,
-            suggestions,
-            message: suggestions.length > 0
-                ? `Unknown command "${command}". Did you mean: ${suggestions.join(', ')}?`
-                : `Unknown command "${command}". Type /help to see all commands.`
-        };
-}
 
-export function handleKeyboardShortcuts(key, config) {
-    const shortcuts = {
-        'ctrl+h': '/help',
-        'ctrl+c': '/config', 
-        'ctrl+s': '/settings',
-        'ctrl+m': '/model',
-        'ctrl+t': '/theme',
-        'ctrl+l': '/clear',
-        'ctrl+q': '/quit',
-        'f1': '/help',
-        'f2': '/settings',
-        'f3': '/config',
-        'f4': '/model'
+    return {
+        valid: false,
+        isCommand: true,
+        command,
+        suggestions,
+        message: suggestions.length > 0
+            ? `Unknown command "${command}". Did you mean: ${suggestions.join(', ')}?`
+            : `Unknown command "${command}". Type /help to see all commands.`
     };
-    
-    return shortcuts[key] || null;
 }
 
 export function validatePrompt(prompt) {

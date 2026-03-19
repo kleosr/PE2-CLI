@@ -7,7 +7,8 @@
     "pe2-cli": "src/cli/main.js"
   },
   "scripts": {
-    "start": "node ./src/cli/main.js"
+    "start": "node ./src/cli/main.js",
+    "test": "node --test ./tests/*.test.js"
   },
   "keywords": [
     "pe2",
@@ -31,7 +32,6 @@
     "@anthropic-ai/sdk": "^0.20.2",
     "@google/generative-ai": "^0.19.0",
     "chalk": "^5.3.0",
-    "cli-highlight": "^2.1.11",
     "cli-progress": "^3.12.0",
     "cli-table3": "^0.6.3",
     "clipboardy": "^4.0.0",

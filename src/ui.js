@@ -39,7 +39,7 @@ export function displayBanner({ themeManager, userPreferences, config, interacti
 
   const useCompact = userPreferences.shouldUseCompactMode() || isNarrow;
   const showBorder = userPreferences.shouldShowBorders() && !isNarrow;
-  displayStatusBar(config, { compact: useCompact, showBorder });
+  displayStatusBar(themeManager, config, { compact: useCompact, showBorder });
   console.log();
 
   if (isNarrow) {
@@ -60,9 +60,10 @@ export function displayBanner({ themeManager, userPreferences, config, interacti
 }
 
 
-export function formatApiKeyDisplay(apiKey, showFullKey = false) {
+export function formatApiKeyDisplay(apiKey, options = {}) {
+  const { visibility = 'masked' } = options;
   if (!apiKey) return 'Not set';
-  if (showFullKey) return apiKey;
+  if (visibility === 'full') return apiKey;
   const keyLength = apiKey.length;
   const { shortApiKeyThreshold, shortApiKeyPrefix, shortApiKeySuffix, apiKeyDisplayLength, apiKeyMaskLength } = PROMPT_LIMITS;
   if (keyLength <= shortApiKeyThreshold) {
@@ -79,8 +80,9 @@ function truncateText(text, maxLength, suffix = '...') {
   return `${cleanTruncated}${suffix}`;
 }
 
-export function formatContentPreview(content, maxLength = PROMPT_LIMITS.previewMaxLength, showFullLength = false) {
-  if (!content || showFullLength) return content;
+export function formatContentPreview(content, options = {}) {
+  const { maxLength = PROMPT_LIMITS.previewMaxLength, mode = 'truncated' } = options;
+  if (!content || mode === 'full') return content;
   const truncated = truncateText(content, maxLength);
   return `${truncated}... [${content.length - truncated.length} more characters]`;
 }
@@ -95,7 +97,7 @@ function getScoreDisplay(score, maxScore = 20) {
   return { scoreBar, scoreColor };
 }
 
-export function displayComplexityAnalysis({ themeManager }, difficulty, iterations, score, rawPrompt) {
+export function displayComplexityAnalysis({ themeManager, difficulty, iterations, score, rawPrompt }) {
   const indicator = DIFFICULTY_INDICATORS[difficulty];
   const terminalWidth = Math.min(process.stdout.columns || UI_CONFIG.terminalWidth.default, UI_CONFIG.terminalWidth.max);
   const separatorLength = Math.min(UI_CONFIG.separator.defaultLength, terminalWidth - 10);
@@ -117,9 +119,17 @@ export function displayComplexityAnalysis({ themeManager }, difficulty, iteratio
   console.log(themeManager.color('muted')('─'.repeat(separatorLength)));
 }
 
-export function displayAdaptiveAnalysis(themeManager, context, strategy, difficulty, complexityScore, recommendedIterations, maxScore = 20) {
+export function displayAdaptiveAnalysis({
+  themeManager,
+  context,
+  strategy,
+  difficulty,
+  complexityScore,
+  recommendedIterations,
+  maxScore = 20
+}) {
   const { scoreBar, scoreColor } = getScoreDisplay(complexityScore, maxScore);
-  
+
   console.log(themeManager.color('info')('  📊 Adaptive Analysis:'));
   console.log(themeManager.color('muted')('  ──────────────────────────────────────────────'));
   console.log(`     ${themeManager.color('text')('Domain')}: ${themeManager.color('primary')(context.domain)}`);

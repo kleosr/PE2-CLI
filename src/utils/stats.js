@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { writeJsonFileAtomically } from './writeJsonFileAtomically.js';
 
 export class StatsTracker {
     constructor() {
@@ -23,10 +24,7 @@ export class StatsTracker {
     }
 
     save() {
-        if (!fs.existsSync(this.statsDir)) {
-            fs.mkdirSync(this.statsDir, { recursive: true });
-        }
-        fs.writeFileSync(this.statsFile, JSON.stringify(this.stats, null, 2));
+        writeJsonFileAtomically(this.statsFile, this.stats);
     }
 
     track(model, complexity, tokens = 0) {

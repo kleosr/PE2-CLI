@@ -6,10 +6,9 @@ import { promptForConfig } from '../configPrompt.js';
 import { analyzePromptComplexity } from '../analysis.js';
 import { displayBanner, formatProcessingPromptDisplay, displayComplexityAnalysis } from '../ui.js';
 import { PROMPT_LIMITS } from '../constants.js';
-import { validateAndSuggestCommand } from '../utils/validation.js';
 import { ConfigError } from '../errorHandler.js';
-import { handleCommand } from './commands.js';
-import { processPrompt } from './promptProcessing.js';
+import { runPromptOptimizationPipeline } from './promptProcessing.js';
+import { handleInteractiveUserLine } from './interactiveLineLoop.js';
 
 function resolveInputPrompt(initialInput, cliOptions) {
     if (!initialInput) return { prompt: null, source: null };
@@ -25,7 +24,16 @@ function resolveInputPrompt(initialInput, cliOptions) {
     return { prompt: fs.readFileSync(initialInput, 'utf-8').trim(), source: `file: ${initialInput}` };
 }
 
-export async function interactiveMode(initialInput, cliOptions, themeManager, sessionManager, statsTracker, userPreferences) {
+export async function interactiveMode(interactiveSession) {
+    const {
+        initialInput,
+        cliOptions,
+        themeManager,
+        sessionManager,
+        statsTracker,
+        userPreferences
+    } = interactiveSession;
+
     if (initialInput && cliOptions.autoDifficulty) {
         const { prompt, error } = resolveInputPrompt(initialInput, cliOptions);
         if (error) {
@@ -37,12 +45,18 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
         const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(rawPrompt);
         displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
         console.log(themeManager.color('info')(`📝 Input: ${formatProcessingPromptDisplay(rawPrompt, PROMPT_LIMITS.processingDisplayMaxLength)}`));
-        displayComplexityAnalysis({ themeManager }, difficulty, recIter, compScore, rawPrompt);
+        displayComplexityAnalysis({
+            themeManager,
+            difficulty,
+            iterations: recIter,
+            score: compScore,
+            rawPrompt
+        });
         return;
     }
 
     displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: true });
-    
+
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
@@ -60,7 +74,7 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
     if (resolvedApiKey) {
         config.apiKey = resolvedApiKey;
     }
-    
+
     if (!config.apiKey) {
         if (initialInput && !cliOptions.interactive) {
             console.log(themeManager.color('error')('✗ No API key configured. Set the proper environment variable or run with --config.'));
@@ -69,7 +83,7 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
         }
         console.log(themeManager.color('warning')('⚠️  First time setup required.'));
         console.log(themeManager.color('muted')('Please configure your API provider and key to continue.\n'));
-        config = await promptForConfig();
+        config = await promptForConfig(themeManager);
         if (!config || !config.apiKey) {
             console.log(themeManager.color('error')('\n✗ Configuration cancelled or incomplete.'));
             rl.close();
@@ -94,9 +108,19 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
         rl.close();
         return;
     }
-    
-    let sessionCounter = 1;
-    let lastResult = null;
+
+    const loopState = {
+        rl,
+        cliOptions,
+        themeManager,
+        sessionManager,
+        userPreferences,
+        statsTracker,
+        config,
+        client,
+        sessionCounter: 1,
+        lastResult: null
+    };
 
     if (initialInput) {
         const { prompt, source, error } = resolveInputPrompt(initialInput, cliOptions);
@@ -111,16 +135,25 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
         if (prompt) {
             console.log(themeManager.color('info')(`📝 Initial input: ${source}`));
             const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(prompt);
-            displayComplexityAnalysis({ themeManager }, difficulty, recIter, compScore, prompt);
+            displayComplexityAnalysis({
+                themeManager,
+                difficulty,
+                iterations: recIter,
+                score: compScore,
+                rawPrompt: prompt
+            });
 
-            if (cliOptions.autoDifficulty) {
-                rl.close();
-                return;
-            }
+            const result = await runPromptOptimizationPipeline({
+                prompt,
+                client,
+                config: { ...config, _cliOptions: cliOptions },
+                sessionId: loopState.sessionCounter++,
+                themeManager,
+                statsTracker,
+                previousOptimizedMarkdown: loopState.lastResult
+            });
+            if (result) loopState.lastResult = result.lastResult;
 
-            const result = await processPrompt(prompt, client, { ...config, _cliOptions: cliOptions }, sessionCounter++, themeManager, statsTracker, lastResult);
-            if (result) lastResult = result.lastResult;
-            
             if (!cliOptions.interactive) {
                 rl.close();
                 return;
@@ -131,86 +164,7 @@ export async function interactiveMode(initialInput, cliOptions, themeManager, se
     rl.prompt();
 
     rl.on('line', async (input) => {
-        const trimmedInput = input.trim();
-        
-        if (trimmedInput === '') {
-            rl.prompt();
-            return;
-        }
-        
-        if (trimmedInput.startsWith('/')) {
-            const command = trimmedInput.toLowerCase().split(' ')[0];
-            
-            const validation = validateAndSuggestCommand(command);
-            
-            if (!validation.valid && validation.isCommand) {
-                console.log(themeManager.color('error')(`✗ ${validation.message}`));
-                rl.prompt();
-                return;
-            }
-            
-            if (validation.valid) {
-                userPreferences.trackCommand(command);
-            }
-            
-            if (command === '/exit' || command === '/quit') {
-                console.log(themeManager.color('success')('\n✨ Thanks for using KleoSr PE2-CLI! Goodbye!'));
-                rl.close();
-                return;
-            }
-            
-            process.stdout.write('\r\x1b[K');
-            
-            const result = await handleCommand(command, config, themeManager, sessionManager, userPreferences, lastResult);
-            
-            if (result?.batch) {
-                for (const prompt of result.batch) {
-                    console.log(`\n${themeManager.color('info')('Processing prompt:')} ${formatProcessingPromptDisplay(prompt, 80)}`);
-                    const processResult = await processPrompt(prompt, client, config, sessionCounter++, themeManager, statsTracker, lastResult);
-                    if (processResult) lastResult = processResult.lastResult;
-                }
-            } else if (result && typeof result === 'object') {
-                config = { ...config, ...result };
-                if (result.provider || result.apiKey) {
-                    client = getProviderClient(config.provider || 'openrouter', resolveApiKey(config.provider, config.apiKey));
-                }
-                displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: true });
-            } else if (typeof result === 'string') {
-                const processResult = await processPrompt(result, client, config, sessionCounter++, themeManager, statsTracker, lastResult);
-                if (processResult) lastResult = processResult.lastResult;
-            }
-            
-            rl.prompt();
-            return;
-        }
-        
-        if (trimmedInput === 'exit' || trimmedInput === 'quit') {
-            console.log(themeManager.color('success')('\n✨ Thanks for using KleoSr PE2-CLI! Goodbye!'));
-            rl.close();
-            return;
-        }
-        
-        if (trimmedInput === 'help') {
-            await handleCommand('/help', config, themeManager, sessionManager, userPreferences, lastResult);
-            rl.prompt();
-            return;
-        }
-        
-        if (trimmedInput === 'config') {
-            await handleCommand('/settings', config, themeManager, sessionManager, userPreferences, lastResult);
-            rl.prompt();
-            return;
-        }
-        
-        if (trimmedInput === 'status') {
-            await handleCommand('/config', config, themeManager, sessionManager, userPreferences, lastResult);
-            rl.prompt();
-            return;
-        }
-        
-        const processResult = await processPrompt(trimmedInput, client, config, sessionCounter++, themeManager, statsTracker, lastResult);
-        if (processResult) lastResult = processResult.lastResult;
-        rl.prompt();
+        await handleInteractiveUserLine(loopState, input.trim());
     });
 
     rl.on('close', () => {

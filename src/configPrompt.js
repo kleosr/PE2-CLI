@@ -1,11 +1,8 @@
 import inquirer from 'inquirer';
 import { PROVIDERS } from './providers/index.js';
 import { CONFIG_FILE, saveConfig } from './config.js';
-import { ThemeManager } from './utils/theme.js';
 
-const themeManager = new ThemeManager();
-
-export async function promptForConfig() {
+export async function promptForConfig(themeManager) {
   console.log(themeManager.color('warning')('\n🔧 Configuration Setup'));
   console.log(themeManager.color('info')("Let's configure your AI provider and API settings.\n"));
 

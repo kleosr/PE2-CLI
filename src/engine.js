@@ -5,8 +5,7 @@ import { formatMarkdownOutput, getInitialTemplate, getRefinementTemplate } from 
 import { buildMessages } from './messages.js';
 import { setTerminalTitle } from './ui.js';
 import { LLM_CONFIG, PROGRESS_PERCENTAGES, PERFORMANCE_METRICS, DEFAULT_EVALUATION, REQUIRED_PROMPT_FIELDS, HTTP_HEADERS } from './constants.js';
-
-const PROMPTS_DIR = path.join(process.cwd(), 'pe2-prompts');
+import { PE2_LOCAL_PROMPTS_DIR } from './paths.js';
 
 const FALLBACK_PROMPT = {
   context: 'No context provided',
@@ -24,54 +23,81 @@ const DEFAULT_PROMPT = {
   output: 'A well-structured response that fully addresses the user\'s needs'
 };
 
+function parseJsonOrThrow(content) {
+  return JSON.parse(content);
+}
+
+function sliceFirstJsonObject(content) {
+  const firstBrace = content.indexOf('{');
+  const lastBrace = content.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return null;
+  }
+  return content.slice(firstBrace, lastBrace + 1);
+}
+
+function tryParseJsonWithTrailingCommaRepair(jsonSlice) {
+  const repaired = jsonSlice.replace(/,(\s*[}\]])/g, '$1');
+  try {
+    return JSON.parse(repaired);
+  } catch {
+    return null;
+  }
+}
+
+function buildPromptFromParsedWithFallbacks(parsed) {
+  const hasAll = REQUIRED_PROMPT_FIELDS.every(field => Object.prototype.hasOwnProperty.call(parsed, field));
+  if (hasAll) {
+    return { prompt: parsed, edits: 'Prompt generation with field validation.' };
+  }
+  return {
+    prompt: {
+      context: parsed.context || FALLBACK_PROMPT.context,
+      role: parsed.role || FALLBACK_PROMPT.role,
+      task: parsed.task || FALLBACK_PROMPT.task,
+      constraints: parsed.constraints || FALLBACK_PROMPT.constraints,
+      output: parsed.output || FALLBACK_PROMPT.output
+    },
+    edits: 'Prompt generation with field validation.'
+  };
+}
+
+function buildStructuredPromptFromRawText(rawPrompt) {
+  return {
+    prompt: {
+      ...DEFAULT_PROMPT,
+      context: `The user wants to: ${rawPrompt.substring(0, 500)}${rawPrompt.length > 500 ? '...' : ''}`
+    },
+    edits: 'Prompt generation with automatic structuring.'
+  };
+}
+
 function parsePromptResponse(content, rawPrompt) {
   try {
-    return { prompt: JSON.parse(content), edits: 'Prompt generation successful.' };
+    return { prompt: parseJsonOrThrow(content), edits: 'Prompt generation successful.' };
   } catch {
-    const firstBrace = content.indexOf('{');
-    const lastBrace = content.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      let jsonStr = content.slice(firstBrace, lastBrace + 1);
-      jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-      try {
-        const parsed = JSON.parse(jsonStr);
-        const hasAll = REQUIRED_PROMPT_FIELDS.every(field => Object.prototype.hasOwnProperty.call(parsed, field));
-        if (hasAll) return { prompt: parsed, edits: 'Prompt generation with field validation.' };
-
-        return {
-          prompt: {
-            context: parsed.context || FALLBACK_PROMPT.context,
-            role: parsed.role || FALLBACK_PROMPT.role,
-            task: parsed.task || FALLBACK_PROMPT.task,
-            constraints: parsed.constraints || FALLBACK_PROMPT.constraints,
-            output: parsed.output || FALLBACK_PROMPT.output
-          },
-          edits: 'Prompt generation with field validation.'
-        };
-      } catch {}
+    const jsonSlice = sliceFirstJsonObject(content);
+    if (jsonSlice) {
+      const parsed = tryParseJsonWithTrailingCommaRepair(jsonSlice);
+      if (parsed) {
+        return buildPromptFromParsedWithFallbacks(parsed);
+      }
     }
-
-    return {
-      prompt: {
-        ...DEFAULT_PROMPT,
-        context: `The user wants to: ${rawPrompt.substring(0, 500)}${rawPrompt.length > 500 ? '...' : ''}`
-      },
-      edits: 'Prompt generation with automatic structuring.'
-    };
+    return buildStructuredPromptFromRawText(rawPrompt);
   }
 }
 
 export async function generateInitialPrompt(client, rawPrompt, model) {
   const systemContent = LLM_CONFIG.systemMessage;
   const userContent = getInitialTemplate(rawPrompt);
-    const response = await client.chat.completions.create({
-      model,
-      messages: buildMessages({ system: systemContent, user: userContent }),
-      max_tokens: LLM_CONFIG.maxTokens,
-      temperature: LLM_CONFIG.temperature
-    });
-    const content = response.choices[0].message.content;
-    return parsePromptResponse(content, rawPrompt);
+  const response = await client.chat.completions.create({
+    model,
+    messages: buildMessages({ system: systemContent, user: userContent }),
+    max_tokens: LLM_CONFIG.maxTokens,
+    temperature: LLM_CONFIG.temperature
+  });
+  const content = response.choices[0].message.content;
+  return parsePromptResponse(content, rawPrompt);
 }
 
 export async function refinePrompt(client, currentPromptJson, model, iterationNum) {
@@ -152,10 +178,12 @@ export async function processPrompt({
       iterations_applied: refinementHistory.length
     };
 
-    if (!config._cliOptions?.outputFile && !fs.existsSync(PROMPTS_DIR)) fs.mkdirSync(PROMPTS_DIR, { recursive: true });
+    if (!config._cliOptions?.outputFile && !fs.existsSync(PE2_LOCAL_PROMPTS_DIR)) {
+      fs.mkdirSync(PE2_LOCAL_PROMPTS_DIR, { recursive: true });
+    }
     const outputFile = config._cliOptions?.outputFile
       ? (path.isAbsolute(config._cliOptions.outputFile) ? config._cliOptions.outputFile : path.join(process.cwd(), config._cliOptions.outputFile))
-      : path.join(PROMPTS_DIR, `pe2-session-${sessionId}.md`);
+      : path.join(PE2_LOCAL_PROMPTS_DIR, `pe2-session-${sessionId}.md`);
 
     const finalOutput = formatMarkdownOutput(workingPrompt, refinementHistory, performanceMetrics, difficulty, complexityScore);
     fs.writeFileSync(outputFile, finalOutput, 'utf-8');

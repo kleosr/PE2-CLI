@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { DEFAULT_CONFIG, FILE_PERMISSIONS } from './constants.js';
+import { writeJsonFileAtomically } from './utils/writeJsonFileAtomically.js';
 
 export const CONFIG_DIR = path.join(os.homedir(), '.kleosr-pe2');
 export const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -28,7 +29,7 @@ export function loadConfig() {
 export function saveConfig(config) {
   ensureConfigDir();
   try {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: FILE_PERMISSIONS.configFile });
+    writeJsonFileAtomically(CONFIG_FILE, config, { mode: FILE_PERMISSIONS.configFile });
     fs.chmodSync(CONFIG_FILE, FILE_PERMISSIONS.configFile);
     return true;
   } catch (error) {

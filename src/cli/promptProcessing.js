@@ -6,10 +6,19 @@ import { validatePrompt } from '../utils/validation.js';
 import { handleError, ValidationError } from '../errorHandler.js';
 import { DEFAULT_CONTEXT, DEFAULT_STRATEGY, DIFFICULTY_INDICATORS, PERFORMANCE_METRICS } from '../constants.js';
 
-export async function processPrompt(prompt, client, config, sessionId, themeManager, statsTracker, lastResult) {
+export async function runPromptOptimizationPipeline({
+    prompt,
+    client,
+    config,
+    sessionId,
+    themeManager,
+    statsTracker,
+    previousOptimizedMarkdown = null
+}) {
+    let lastResult = previousOptimizedMarkdown;
     try {
         setTerminalTitle(`KleoSr PE2-CLI - Processing Session ${sessionId}`);
-        
+
         const validationError = validatePrompt(prompt);
         if (validationError) {
             throw new ValidationError(validationError);
@@ -17,22 +26,30 @@ export async function processPrompt(prompt, client, config, sessionId, themeMana
 
         const context = { ...DEFAULT_CONTEXT };
         const strategy = { ...DEFAULT_STRATEGY };
-        
+
         console.log();
         console.log(themeManager.color('info')('╔' + '═'.repeat(58) + '╗'));
         console.log(themeManager.color('info')(`║  ⚡ Processing Session ${sessionId} (${prompt.length} chars)` + ' '.repeat(Math.max(0, 58 - 40 - sessionId.toString().length)) + '║'));
         console.log(themeManager.color('info')('╚' + '═'.repeat(58) + '╝'));
         console.log();
-        
+
         const { difficulty, iterations: baseIterations, score: complexityScore } = analyzePromptComplexity(prompt);
-        
+
         const cliIterations = config._cliOptions?.iterations;
         const iterations = Number.isInteger(cliIterations) && cliIterations > 0
             ? cliIterations
             : (baseIterations || strategy.iterations || 2);
 
-        displayAdaptiveAnalysis(themeManager, context, strategy, difficulty, complexityScore, iterations, PERFORMANCE_METRICS.complexityScoreMax);
-        
+        displayAdaptiveAnalysis({
+            themeManager,
+            context,
+            strategy,
+            difficulty,
+            complexityScore,
+            recommendedIterations: iterations,
+            maxScore: PERFORMANCE_METRICS.complexityScoreMax
+        });
+
         const result = await runEngine({
             prompt,
             client,
@@ -46,21 +63,22 @@ export async function processPrompt(prompt, client, config, sessionId, themeMana
             themeManager,
             statsTracker
         });
-        
+
         if (!result.success) {
-            return;
+            return { lastResult };
         }
-        
-        lastResult = fs.readFileSync(result.outputFile, 'utf-8');
-        
+
+        const optimizedMarkdown = fs.readFileSync(result.outputFile, 'utf-8');
+        lastResult = optimizedMarkdown;
+
         console.log();
         console.log(themeManager.color('success')('╔' + '═'.repeat(58) + '╗'));
         console.log(themeManager.color('success')('║  ✓ PE²-optimized prompt saved successfully' + ' '.repeat(18) + '║'));
         console.log(themeManager.color('success')('╚' + '═'.repeat(58) + '╝'));
         console.log();
-        
+
         const refinementCount = result.refinementHistory?.length ?? 0;
-        
+
         console.log(themeManager.color('info')('  📊 Results Summary:'));
         console.log(themeManager.color('muted')('  ──────────────────────────────────────────────'));
         console.log(`     ${themeManager.color('text')('Domain')}: ${themeManager.color('primary')(context.domain)}`);
@@ -73,7 +91,7 @@ export async function processPrompt(prompt, client, config, sessionId, themeMana
         console.log();
         console.log(themeManager.color('muted')('  💡 Tip: Use /copy to copy the result to clipboard'));
         console.log();
-        
+
         setTerminalTitle('KleoSr PE²-CLI - Interactive Mode');
     } catch (error) {
         const exitCode = handleError(error, themeManager);

@@ -15,6 +15,11 @@ const sessionManager = new SessionManager();
 const statsTracker = new StatsTracker();
 const userPreferences = new UserPreferences();
 
+const savedTheme = userPreferences.get('theme');
+if (savedTheme === 'light' || savedTheme === 'dark') {
+    themeManager.setTheme(savedTheme);
+}
+
 setupGlobalErrorHandlers(themeManager);
 
 async function main() {
@@ -77,11 +82,18 @@ Input Methods:
             console.log(themeManager.color('success')(`🔧 Configuration Mode | v3.4.6 | ${new Date().toLocaleString()}`));
             console.log(themeManager.color('primary')('='.repeat(78)));
 
-            await promptForConfig();
+            await promptForConfig(themeManager);
             return;
         }
 
-        await interactiveMode(input, options, themeManager, sessionManager, statsTracker, userPreferences);
+        await interactiveMode({
+            initialInput: input,
+            cliOptions: options,
+            themeManager,
+            sessionManager,
+            statsTracker,
+            userPreferences
+        });
     } catch (error) {
         if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') {
             return;

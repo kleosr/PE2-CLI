@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { SESSION_CONFIG, DEFAULT_CONFIG, UI_CONFIG } from '../constants.js';
+import { writeJsonFileAtomically } from './writeJsonFileAtomically.js';
 import { COMMANDS } from './validation.js';
 
 export class UserPreferences {
@@ -39,10 +40,7 @@ export class UserPreferences {
 
     save() {
         try {
-            if (!fs.existsSync(this.prefsDir)) {
-                fs.mkdirSync(this.prefsDir, { recursive: true });
-            }
-            fs.writeFileSync(this.prefsFile, JSON.stringify(this.preferences, null, 2));
+            writeJsonFileAtomically(this.prefsFile, this.preferences);
         } catch {
         }
     }
