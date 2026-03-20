@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import figlet from 'figlet';
 import { displayStatusBar } from './utils/display.js';
 import { UI_CONFIG, PROMPT_LIMITS, DIFFICULTY_INDICATORS } from './constants.js';
+import { PE2_CODE_GENERATION, cliBannerSubtitle, cliVersionWithPrefix } from './versionInfo.js';
 
 export function clearConsole() {
   process.stdout.write(process.platform === 'win32' ? '\x1Bc' : '\x1B[2J\x1B[3J\x1B[H');
@@ -26,13 +27,13 @@ export function displayBanner({ themeManager, userPreferences, config, interacti
 
   if (isNarrow) {
     console.log(themeManager.color('primary')('\n╔═══════════════════════════════╗'));
-    console.log(themeManager.color('primary')('║      PE²-CLI v3.4.6          ║'));
+    console.log(themeManager.color('primary')(`║      PE²-CLI ${cliVersionWithPrefix()}          ║`));
     console.log(themeManager.color('primary')('╚═══════════════════════════════╝'));
-    console.log(themeManager.color('secondary')('  ⚡ Prompt Engineering 2.0'));
+    console.log(themeManager.color('secondary')(`  ⚡ Prompt Engineering 2.0 • Code ${PE2_CODE_GENERATION}`));
   } else {
     const figletText = renderAnsiShadowFiglet('KLEOSR PE2');
     console.log(figletText);
-    console.log(themeManager.color('muted')(' '.repeat(Math.max(0, Math.floor((terminalWidth - 30) / 2))) + 'v3.4.6 • Prompt Engineering 2.0'));
+    console.log(themeManager.color('muted')(' '.repeat(Math.max(0, Math.floor((terminalWidth - 30) / 2))) + cliBannerSubtitle()));
   }
 
   console.log();

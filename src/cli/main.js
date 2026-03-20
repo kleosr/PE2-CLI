@@ -6,6 +6,7 @@ import { StatsTracker } from '../utils/stats.js';
 import { UserPreferences } from '../utils/preferences.js';
 import { setupGlobalErrorHandlers } from '../errorHandler.js';
 import { displayBanner, setTerminalTitle } from '../ui.js';
+import { CLI_SEMVER, PE2_CODE_GENERATION, cliVersionWithPrefix } from '../versionInfo.js';
 import { loadConfig } from '../config.js';
 import { promptForConfig } from '../configPrompt.js';
 import { interactiveMode } from './interactive.js';
@@ -29,7 +30,7 @@ async function main() {
     program
         .name('pe2-cli')
         .description('🚀 KleoSr PE2-CLI: Convert raw prompts to PE2-optimized prompts using adaptive intelligence.')
-        .version('3.4.6')
+        .version(CLI_SEMVER)
         .argument('[input]', 'Text prompt or path to file (optional - if not provided, starts interactive mode)')
         .option('--model <model>', 'OpenRouter model name (overrides config)')
         .option('--iterations <number>', 'Number of PE2 refinement rounds (auto-detected if not specified)', parseInt)
@@ -79,7 +80,7 @@ Input Methods:
         if (options.config) {
             setTerminalTitle('KleoSr PE2-CLI - Configuration');
             displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
-            console.log(themeManager.color('success')(`🔧 Configuration Mode | v3.4.6 | ${new Date().toLocaleString()}`));
+            console.log(themeManager.color('success')(`🔧 Configuration Mode | ${cliVersionWithPrefix()} • Code ${PE2_CODE_GENERATION} | ${new Date().toLocaleString()}`));
             console.log(themeManager.color('primary')('='.repeat(78)));
 
             await promptForConfig(themeManager);
