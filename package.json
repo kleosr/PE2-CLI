@@ -25,6 +25,9 @@
     "type": "git",
     "url": "git+https://github.com/kleosr/PE2-CLI.git"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18.17.0"
   },
