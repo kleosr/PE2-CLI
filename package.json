@@ -1,6 +1,6 @@
 {
   "name": "@kleosr/pe2-cli",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "🚀 KleoSr PE2-CLI: Convert raw prompts to PE2-optimized prompts using adaptive intelligence",
   "type": "module",
   "bin": {
