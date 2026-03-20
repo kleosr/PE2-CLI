@@ -1,7 +1,7 @@
-# Publica en npm con OIDC (Trusted Publishing). Sin token ni --otp.
-# Requisito en npmjs.com: paquete → Settings → Trusted publishing → GitHub Actions
-#   Repo: kleosr/PE2-CLI  |  Workflow: publish.yml  (exacto, con extensión)
-# Docs: https://docs.npmjs.com/trusted-publishers
+# Runs on push of a version tag (v*).
+# Repo → Settings → Secrets → Actions: add NPM_TOKEN (npm granular token, read/write on
+# @kleosr/pe2-cli; enable Bypass 2FA on the token if npm asks for 2FA on publish).
+# https://docs.npmjs.com/creating-and-viewing-access-tokens
 name: Publish to npm
 
 on:
@@ -10,7 +10,6 @@ on:
       - 'v*'
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -24,11 +23,11 @@ jobs:
           node-version: '22.14'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Use npm CLI with trusted publishing support
-        run: npm install -g npm@^11.5.1
-
       - run: npm ci
 
       - run: npm test
 
-      - run: npm publish
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

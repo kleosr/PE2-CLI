@@ -67,6 +67,10 @@ npm start
 
 Tests use Node’s built-in runner: `node --test ./tests/*.test.js`.
 
+## CI (npm publish)
+
+Pushing a tag `v*` runs `.github/workflows/publish.yml`. That job needs a GitHub Actions secret named `NPM_TOKEN` (granular npm token with publish access to this package).
+
 ## Package
 
 - npm: [@kleosr/pe2-cli](https://www.npmjs.com/package/@kleosr/pe2-cli)
