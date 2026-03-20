@@ -71,6 +71,14 @@ Tests use Node’s built-in runner: `node --test ./tests/*.test.js`.
 
 Pushing a tag `v*` runs `.github/workflows/publish.yml`. That job needs a GitHub Actions secret named `NPM_TOKEN` (granular npm token with publish access to this package).
 
+From a machine where you are logged into GitHub: install [GitHub CLI](https://cli.github.com/) (`winget install GitHub.cli`), run `gh auth login -h github.com -s repo` once, then:
+
+```powershell
+.\scripts\set-npm-token-for-actions.ps1
+```
+
+It only sends the token to GitHub’s API; it does not store it in the repo.
+
 ## Package
 
 - npm: [@kleosr/pe2-cli](https://www.npmjs.com/package/@kleosr/pe2-cli)
