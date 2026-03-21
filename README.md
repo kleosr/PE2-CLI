@@ -2,6 +2,8 @@
 
 Command-line tool that takes a rough prompt (text or file), calls a configured LLM, and returns a structured PE2-style prompt. Release line is **4.0.0** (npm semver); the CLI labels the generation as **Code V4** in the banner.
 
+Visit at: https://www.npmjs.com/package/@kleosr/pe2-cli
+
 ## Requirements
 
 - Node.js 18.17 or newer
