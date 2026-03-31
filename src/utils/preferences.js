@@ -15,8 +15,8 @@ export class UserPreferences {
     load() {
         if (fs.existsSync(this.prefsFile)) {
             try {
-                const data = fs.readFileSync(this.prefsFile, 'utf-8');
-                return JSON.parse(data);
+                const storedPrefs = fs.readFileSync(this.prefsFile, 'utf-8');
+                return JSON.parse(storedPrefs);
             } catch {
             }
         }

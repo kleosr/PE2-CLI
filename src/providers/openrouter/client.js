@@ -28,18 +28,32 @@ function buildOpenRouterRequestHeaders(apiKey, extraHeaders) {
   };
 }
 
+function handleOpenRouterTimeout() {
+  throw new Error('OpenRouter request timed out after 30 seconds');
+}
+
 async function fetchOpenRouterChatCompletion(baseURL, apiKey, options) {
-  const response = await fetch(openRouterChatCompletionsUrl(baseURL), {
-    method: 'POST',
-    headers: buildOpenRouterRequestHeaders(apiKey, options.headers ?? {}),
-    body: JSON.stringify(buildChatCompletionBody(options))
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-  if (!response.ok) {
-    throw new Error(`OpenRouter error: ${response.status}`);
+  try {
+    const response = await fetch(openRouterChatCompletionsUrl(baseURL), {
+      method: 'POST',
+      headers: buildOpenRouterRequestHeaders(apiKey, options.headers ?? {}),
+      body: JSON.stringify(buildChatCompletionBody(options)),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`OpenRouter error: ${response.status}`);
+    }
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') handleOpenRouterTimeout();
+    throw error;
   }
-
-  return response.json();
 }
 
 export function createOpenRouterClient({ apiKey, baseURL = 'https://openrouter.ai/api/v1' }) {

@@ -17,25 +17,33 @@ export async function handleTheme(ctx) {
     return config;
 }
 
+function formatBool(value) {
+    return value ? 'Yes' : 'No';
+}
+
+function buildPreferenceRows(userPreferences) {
+    return [
+        ['Theme', userPreferences.get('theme')],
+        ['Compact Mode', formatBool(userPreferences.get('compactMode') ?? false)],
+        ['Show Borders', formatBool(userPreferences.get('showBorders') ?? false)],
+        ['Auto Save', formatBool(userPreferences.get('autoSave') ?? false)],
+        ['Max History', userPreferences.get('maxHistoryItems')],
+        ['Default Provider', userPreferences.get('defaultProvider')]
+    ];
+}
+
 export async function handlePreferences(ctx) {
     const { themeManager, userPreferences } = ctx;
     console.log('\n' + themeManager.color('info')('User Preferences:'));
 
-    const prefsTerminalWidth = process.stdout.columns || UI_CONFIG.terminalWidth.default;
-    const useMinimalPrefs = prefsTerminalWidth < UI_CONFIG.terminalWidth.compactThreshold;
+    const terminalWidth = process.stdout.columns || UI_CONFIG.terminalWidth.default;
+    const useMinimal = terminalWidth < UI_CONFIG.terminalWidth.compactThreshold;
 
     const prefsTable = createTable(
         themeManager,
         ['Setting', 'Value'],
-        [
-            ['Theme', userPreferences.get('theme')],
-            ['Compact Mode', userPreferences.get('compactMode') ?? false ? 'Yes' : 'No'],
-            ['Show Borders', userPreferences.get('showBorders') ?? false ? 'Yes' : 'No'],
-            ['Auto Save', userPreferences.get('autoSave') ?? false ? 'Yes' : 'No'],
-            ['Max History', userPreferences.get('maxHistoryItems')],
-            ['Default Provider', userPreferences.get('defaultProvider')]
-        ],
-        { minimal: useMinimalPrefs, compact: true }
+        buildPreferenceRows(userPreferences),
+        { minimal: useMinimal, compact: true }
     );
     console.log(prefsTable);
 

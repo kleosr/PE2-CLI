@@ -43,17 +43,32 @@ export class ProviderError extends CLIError {
   }
 }
 
+function handleCliError(error, formatError, formatMuted) {
+  console.error(formatError(`✗ [${error.constructor.name}] ${error.message}`));
+  if (error.details && Object.keys(error.details).length > 0) {
+    console.error(formatMuted(JSON.stringify(error.details, null, 2)));
+  }
+  return error.exitCode;
+}
+
+function handleUnexpectedError(error, formatError, formatMuted, isDebug) {
+  const msg = error.message || 'An unknown error occurred';
+  console.error(formatError(`✗ Unexpected error: ${msg}`));
+  if (isDebug && error.stack) {
+    console.error(formatMuted(error.stack));
+  } else if (!isDebug) {
+    console.error(formatMuted('Run with DEBUG=1 for more details'));
+  }
+  return ERROR_CODES.RUNTIME_ERROR.exitCode;
+}
+
 export function handleError(error, themeManager, { isDebug = process.env.DEBUG } = {}) {
   const formatError = themeManager.color('error');
   const formatWarning = themeManager.color('warning');
   const formatMuted = themeManager.color('muted');
 
   if (error instanceof CLIError) {
-    console.error(formatError(`✗ [${error.constructor.name}] ${error.message}`));
-    if (error.details && Object.keys(error.details).length > 0) {
-      console.error(formatMuted(JSON.stringify(error.details, null, 2)));
-    }
-    return error.exitCode;
+    return handleCliError(error, formatError, formatMuted);
   }
 
   if (error.name === 'ExitPromptError') {
@@ -61,16 +76,7 @@ export function handleError(error, themeManager, { isDebug = process.env.DEBUG }
     return 0;
   }
 
-  const errorMessage = error.message || 'An unknown error occurred';
-  console.error(formatError(`✗ Unexpected error: ${errorMessage}`));
-
-  if (isDebug && error.stack) {
-    console.error(formatMuted(error.stack));
-  } else if (!isDebug) {
-    console.error(formatMuted('Run with DEBUG=1 for more details'));
-  }
-
-  return ERROR_CODES.RUNTIME_ERROR.exitCode;
+  return handleUnexpectedError(error, formatError, formatMuted, isDebug);
 }
 
 export function setupGlobalErrorHandlers(themeManager) {

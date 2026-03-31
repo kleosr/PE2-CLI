@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-export function writeJsonFileAtomically(filePath, data, fileWriteOptions = {}) {
-    const json = JSON.stringify(data, null, 2);
+export function writeJsonFileAtomically(filePath, jsonData, fileWriteOptions = {}) {
+    const json = JSON.stringify(jsonData, null, 2);
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });

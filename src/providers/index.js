@@ -51,16 +51,16 @@ export const PROVIDERS = {
   }
 };
 
-export function getProviderClient(provider, apiKey) {
-  const factories = {
-    openai: (key) => createOpenAIClient(key, PROVIDERS.openai.baseURL),
-    openrouter: (key) => createOpenRouterClient({ apiKey: key, baseURL: PROVIDERS.openrouter.baseURL }),
-    anthropic: (key) => createAnthropicClient(key),
-    google: (key) => createGoogleClient(key),
-    ollama: (baseURL) => createOllamaClient(baseURL || PROVIDERS.ollama.baseURL)
-  };
+const PROVIDER_FACTORIES = {
+  openai: (key) => createOpenAIClient(key, PROVIDERS.openai.baseURL),
+  openrouter: (key) => createOpenRouterClient({ apiKey: key, baseURL: PROVIDERS.openrouter.baseURL }),
+  anthropic: (key) => createAnthropicClient(key),
+  google: (key) => createGoogleClient(key),
+  ollama: (baseURL) => createOllamaClient(baseURL || PROVIDERS.ollama.baseURL)
+};
 
-  const createClient = factories[provider];
+export function getProviderClient(provider, apiKey) {
+  const createClient = PROVIDER_FACTORIES[provider];
   if (!createClient) throw new Error(`Unsupported provider: ${provider}`);
   return createClient(apiKey);
 }
