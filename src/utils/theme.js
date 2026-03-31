@@ -1,37 +1,39 @@
 import chalk, { Chalk } from 'chalk';
 
+const DARK_THEME = {
+    primary: '#6BB6FF',
+    secondary: '#FFE066',
+    success: '#5AE6C5',
+    error: '#FF7B7B',
+    warning: '#FFE066',
+    info: '#C5A9EA',
+    text: '#FFFFFF',
+    muted: '#A0A0A0',
+    border: '#4A4A4A',
+    background: '#1A1A1A'
+};
+
+const LIGHT_THEME = {
+    primary: '#0052CC',
+    secondary: '#B8860B',
+    success: '#00A846',
+    error: '#C62828',
+    warning: '#B8860B',
+    info: '#6A4C93',
+    text: '#000000',
+    muted: '#505050',
+    border: '#D0D0D0',
+    background: '#FFFFFF'
+};
+
+const THEME_MAP = { dark: DARK_THEME, light: LIGHT_THEME };
+
 export class ThemeManager {
     constructor() {
         const colorLevel = this.detectColorLevel();
         this.chalkInstance = new Chalk({ level: colorLevel });
         this.chalkStderr = new Chalk({ level: colorLevel, stream: process.stderr });
-        
-        this.themes = {
-            dark: {
-                primary: '#6BB6FF',
-                secondary: '#FFE066',
-                success: '#5AE6C5',
-                error: '#FF7B7B',
-                warning: '#FFE066',
-                info: '#C5A9EA',
-                text: '#FFFFFF',
-                muted: '#A0A0A0',
-                border: '#4A4A4A',
-                background: '#1A1A1A'
-            },
-            light: {
-                primary: '#0052CC',
-                secondary: '#B8860B',
-                success: '#00A846',
-                error: '#C62828',
-                warning: '#B8860B',
-                info: '#6A4C93',
-                text: '#000000',
-                muted: '#505050',
-                border: '#D0D0D0',
-                background: '#FFFFFF'
-            }
-        };
+        this.themes = THEME_MAP;
         this.currentTheme = 'dark';
         this.colorCache = new Map();
     }

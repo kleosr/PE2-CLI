@@ -16,159 +16,183 @@ function resolveInputPrompt(initialInput, cliOptions) {
 
     const exists = fs.existsSync(initialInput);
     if (cliOptions.file) {
-        if (!exists) return { prompt: null, source: `file: ${initialInput}`, error: `❌ Error: File not found at ${initialInput}` };
-        return { prompt: fs.readFileSync(initialInput, 'utf-8').trim(), source: `file: ${initialInput}` };
+        if (!exists) {
+            return { prompt: null, source: `file: ${initialInput}`, error: `File not found: ${initialInput}` };
+        }
+        const fileContents = fs.readFileSync(initialInput, 'utf-8').trim();
+        return { prompt: fileContents, source: `file: ${initialInput}` };
     }
 
     if (!exists) return { prompt: initialInput, source: 'direct text' };
-    return { prompt: fs.readFileSync(initialInput, 'utf-8').trim(), source: `file: ${initialInput}` };
+    const fileContents = fs.readFileSync(initialInput, 'utf-8').trim();
+    return { prompt: fileContents, source: `file: ${initialInput}` };
 }
 
-export async function interactiveMode(interactiveSession) {
-    const {
-        initialInput,
-        cliOptions,
-        themeManager,
-        sessionManager,
-        statsTracker,
-        userPreferences
-    } = interactiveSession;
+async function handleAutoDifficultyMode(options) {
+    const { initialInput, cliOptions, themeManager, userPreferences } = options;
+    const { prompt, error } = resolveInputPrompt(initialInput, cliOptions);
+    if (error) {
+        console.log(themeManager.color('error')(error));
+        return true;
+    }
 
-    if (initialInput && cliOptions.autoDifficulty) {
-        const { prompt, error } = resolveInputPrompt(initialInput, cliOptions);
-        if (error) {
-            console.log(themeManager.color('error')(error));
-            return;
+    const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(prompt);
+    displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
+    const displayText = formatProcessingPromptDisplay(prompt, PROMPT_LIMITS.processingDisplayMaxLength);
+    console.log(themeManager.color('info')(`Input: ${displayText}`));
+    displayComplexityAnalysis({ themeManager, difficulty, iterations: recIter, score: compScore, rawPrompt: prompt });
+    return true;
+}
+
+function mergeConfigWithCliOptions(baseConfig, cliOptions) {
+    const merged = { ...baseConfig };
+    if (cliOptions.provider) merged.provider = cliOptions.provider;
+    if (cliOptions.model) merged.model = cliOptions.model;
+    const resolvedKey = resolveApiKey(merged.provider, merged.apiKey);
+    const fallbackKey = merged.provider === 'ollama' ? PROVIDERS.ollama.baseURL : null;
+    if (resolvedKey ?? fallbackKey) merged.apiKey = resolvedKey ?? fallbackKey;
+    return merged;
+}
+
+async function promptForInitialConfig(themeManager, rl) {
+    console.log(themeManager.color('warning')('First time setup required.'));
+    console.log(themeManager.color('muted')('Please configure your API provider and key to continue.\n'));
+    const newConfig = await promptForConfig(themeManager);
+    if (!newConfig || !newConfig.apiKey) {
+        console.log(themeManager.color('error')('\nConfiguration cancelled or incomplete.'));
+        rl.close();
+        return null;
+    }
+    return newConfig;
+}
+
+async function createApiClient(config, themeManager, rl) {
+    try {
+        const apiKey = resolveApiKey(config.provider, config.apiKey);
+        if (!apiKey && config.provider !== 'ollama') {
+            throw new ConfigError('API key is required. Configure with /settings or set environment variable.');
         }
+        return getProviderClient(config.provider ?? 'openrouter', apiKey);
+    } catch (error) {
+        if (error instanceof ConfigError) {
+            console.log(themeManager.color('error')(`\n${error.message}`));
+        } else {
+            console.log(themeManager.color('error')(`\nFailed to initialize API client: ${error.message}`));
+        }
+        console.log(themeManager.color('muted')('Please check your configuration with /settings'));
+        rl.close();
+        return null;
+    }
+}
 
-        const rawPrompt = prompt;
-        const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(rawPrompt);
-        displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
-        console.log(themeManager.color('info')(`📝 Input: ${formatProcessingPromptDisplay(rawPrompt, PROMPT_LIMITS.processingDisplayMaxLength)}`));
-        displayComplexityAnalysis({
-            themeManager,
-            difficulty,
-            iterations: recIter,
-            score: compScore,
-            rawPrompt
+async function initializeApiClient(config, themeManager, initialInput, cliOptions, rl) {
+    if (!config.apiKey) {
+        if (initialInput && !cliOptions.interactive) {
+            console.log(themeManager.color('error')('No API key configured. Set environment variable or run with --config.'));
+            rl.close();
+            return null;
+        }
+        return promptForInitialConfig(themeManager, rl);
+    }
+    return createApiClient(config, themeManager, rl);
+}
+
+function createReadlineInterface(themeManager) {
+    return readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        prompt: themeManager.color('primary')('> ')
+    });
+}
+
+async function processInitialInput(loopState, initialInput) {
+    const { prompt, source, error } = resolveInputPrompt(initialInput, loopState.cliOptions);
+    if (error) {
+        console.log(loopState.themeManager.color('error')(error));
+        if (!loopState.cliOptions.interactive) {
+            loopState.rl.close();
+            return false;
+        }
+    }
+
+    if (!prompt) return true;
+
+    console.log(loopState.themeManager.color('info')(`Initial input: ${source}`));
+    const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(prompt);
+    displayComplexityAnalysis({
+        themeManager: loopState.themeManager,
+        difficulty,
+        iterations: recIter,
+        score: compScore,
+        rawPrompt: prompt
+    });
+
+    const result = await runPromptOptimizationPipeline({
+        prompt,
+        client: loopState.client,
+        config: { ...loopState.config, _cliOptions: loopState.cliOptions },
+        sessionId: loopState.sessionCounter++,
+        themeManager: loopState.themeManager,
+        statsTracker: loopState.statsTracker,
+        previousOptimizedMarkdown: loopState.lastResult
+    });
+    if (result) loopState.lastResult = result.lastResult;
+
+    if (!loopState.cliOptions.interactive) {
+        loopState.rl.close();
+        return false;
+    }
+    return true;
+}
+
+function setupEventListeners(loopState) {
+    loopState.rl.prompt();
+
+    loopState.rl.on('line', async (input) => {
+        await handleInteractiveUserLine(loopState, input.trim());
+    });
+
+    loopState.rl.on('close', () => {
+        console.log(loopState.themeManager.color('success')('\nSession ended.'));
+        process.exit(0);
+    });
+}
+
+export async function interactiveMode(session) {
+    if (session.initialInput && session.cliOptions.autoDifficulty) {
+        await handleAutoDifficultyMode({
+            initialInput: session.initialInput,
+            cliOptions: session.cliOptions,
+            themeManager: session.themeManager,
+            userPreferences: session.userPreferences
         });
         return;
     }
 
-    displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: true });
+    displayBanner({ themeManager: session.themeManager, userPreferences: session.userPreferences, config: loadConfig(), interactive: true });
+    const rl = createReadlineInterface(session.themeManager);
 
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-        prompt: themeManager.color('primary')('⚡ ') + themeManager.color('text')('> ')
-    });
-
-    let config = { ...getDefaultConfig(), ...loadConfig() };
-    if (cliOptions.provider) {
-        config.provider = cliOptions.provider;
-    }
-    if (cliOptions.model) {
-        config.model = cliOptions.model;
-    }
-    const resolvedApiKey = resolveApiKey(config.provider, config.apiKey) ?? (config.provider === 'ollama' ? PROVIDERS.ollama.baseURL : null);
-    if (resolvedApiKey) {
-        config.apiKey = resolvedApiKey;
-    }
-
-    if (!config.apiKey) {
-        if (initialInput && !cliOptions.interactive) {
-            console.log(themeManager.color('error')('✗ No API key configured. Set the proper environment variable or run with --config.'));
-            rl.close();
-            return;
-        }
-        console.log(themeManager.color('warning')('⚠️  First time setup required.'));
-        console.log(themeManager.color('muted')('Please configure your API provider and key to continue.\n'));
-        config = await promptForConfig(themeManager);
-        if (!config || !config.apiKey) {
-            console.log(themeManager.color('error')('\n✗ Configuration cancelled or incomplete.'));
-            rl.close();
-            return;
-        }
-    }
-
-    let client;
-    try {
-        const apiKeyInitial = resolveApiKey(config.provider, config.apiKey);
-        if (!apiKeyInitial && config.provider !== 'ollama') {
-            throw new ConfigError('API key is required. Please configure with /settings or set environment variable.');
-        }
-        client = getProviderClient(config.provider ?? 'openrouter', apiKeyInitial);
-    } catch (error) {
-        if (error instanceof ConfigError) {
-            console.log(themeManager.color('error')(`\n✗ ${error.message}`));
-        } else {
-            console.log(themeManager.color('error')(`\n✗ Failed to initialize API client: ${error.message}`));
-        }
-        console.log(themeManager.color('muted')('Please check your configuration with /settings'));
-        rl.close();
-        return;
-    }
+    const config = mergeConfigWithCliOptions({ ...getDefaultConfig(), ...loadConfig() }, session.cliOptions);
+    const client = await initializeApiClient(config, session.themeManager, session.initialInput, session.cliOptions, rl);
+    if (!client) return;
 
     const loopState = {
         rl,
-        cliOptions,
-        themeManager,
-        sessionManager,
-        userPreferences,
-        statsTracker,
+        cliOptions: session.cliOptions,
+        themeManager: session.themeManager,
+        sessionManager: session.sessionManager,
+        userPreferences: session.userPreferences,
+        statsTracker: session.statsTracker,
         config,
         client,
         sessionCounter: 1,
         lastResult: null
     };
 
-    if (initialInput) {
-        const { prompt, source, error } = resolveInputPrompt(initialInput, cliOptions);
-        if (error) {
-            console.log(themeManager.color('error')(error));
-            if (!cliOptions.interactive) {
-                rl.close();
-                return;
-            }
-        }
-
-        if (prompt) {
-            console.log(themeManager.color('info')(`📝 Initial input: ${source}`));
-            const { difficulty, iterations: recIter, score: compScore } = analyzePromptComplexity(prompt);
-            displayComplexityAnalysis({
-                themeManager,
-                difficulty,
-                iterations: recIter,
-                score: compScore,
-                rawPrompt: prompt
-            });
-
-            const result = await runPromptOptimizationPipeline({
-                prompt,
-                client,
-                config: { ...config, _cliOptions: cliOptions },
-                sessionId: loopState.sessionCounter++,
-                themeManager,
-                statsTracker,
-                previousOptimizedMarkdown: loopState.lastResult
-            });
-            if (result) loopState.lastResult = result.lastResult;
-
-            if (!cliOptions.interactive) {
-                rl.close();
-                return;
-            }
-        }
+    if (session.initialInput) {
+        const shouldContinue = await processInitialInput(loopState, session.initialInput);
+        if (!shouldContinue) return;
     }
 
-    rl.prompt();
-
-    rl.on('line', async (input) => {
-        await handleInteractiveUserLine(loopState, input.trim());
-    });
-
-    rl.on('close', () => {
-        console.log(themeManager.color('success')('\n✨ Session ended. Have a great day!'));
-        process.exit(0);
-    });
+    setupEventListeners(loopState);
 }

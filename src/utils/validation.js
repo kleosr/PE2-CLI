@@ -34,32 +34,36 @@ export function getCommandSuggestions(input, limit = SESSION_CONFIG.commandSugge
         .slice(0, limit);
 }
 
+function buildUnknownCommandMessage(command, suggestions) {
+    if (suggestions.length > 0) {
+        return `Unknown command "${command}". Did you mean: ${suggestions.join(', ')}?`;
+    }
+    return `Unknown command "${command}". Type /help to see all commands.`;
+}
+
 export function validateAndSuggestCommand(input) {
     if (!input.startsWith('/')) {
         return { valid: false, isCommand: false };
     }
-    
+
     const command = input.toLowerCase().split(' ')[0];
-    
+
     if (COMMANDS[command]) {
-        return { 
-            valid: true, 
-            isCommand: true, 
+        return {
+            valid: true,
+            isCommand: true,
             command,
             description: COMMANDS[command]
         };
     }
-    
-    const suggestions = getCommandSuggestions(command, 3);
 
+    const suggestions = getCommandSuggestions(command, 3);
     return {
         valid: false,
         isCommand: true,
         command,
         suggestions,
-        message: suggestions.length > 0
-            ? `Unknown command "${command}". Did you mean: ${suggestions.join(', ')}?`
-            : `Unknown command "${command}". Type /help to see all commands.`
+        message: buildUnknownCommandMessage(command, suggestions)
     };
 }
 

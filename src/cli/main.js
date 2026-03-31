@@ -23,54 +23,95 @@ if (savedTheme === 'light' || savedTheme === 'dark') {
 
 setupGlobalErrorHandlers(themeManager);
 
-async function main() {
-    setTerminalTitle('KleoSr PE2-CLI');
-    const program = new Command();
-    
+const HELP_TEXT = `
+Examples:
+  npx @kleosr/pe2-cli                              # Start interactive mode
+  npx @kleosr/pe2-cli --config                     # Configure API key
+  npx @kleosr/pe2-cli "Write a Python function"    # Process text
+  npx @kleosr/pe2-cli input.txt                    # Process file
+  npx @kleosr/pe2-cli input.txt --model openai/gpt-4o  # Override model
+  npx @kleosr/pe2-cli "Complex prompt" --iterations 3
+
+Configuration:
+  First run will prompt for API key and model.
+  Settings saved to ~/.kleosr-pe2/config.json
+
+Input Methods:
+  1. Direct text: npx @kleosr/pe2-cli "Your prompt"
+  2. File path: npx @kleosr/pe2-cli input.txt
+  3. Interactive: npx @kleosr/pe2-cli (no args)
+  4. Force text: --text flag
+  5. Force file: --file flag
+            `;
+
+const CLI_OPTIONS = [
+    ['--model <model>', 'Override model'],
+    ['--iterations <number>', 'Refinement rounds', parseInt],
+    ['--output-file <file>', 'Output markdown path'],
+    ['--auto-difficulty', 'Show complexity analysis'],
+    ['-i, --interactive', 'Start interactive mode'],
+    ['--config', 'Configure API key and model'],
+    ['--text', 'Force input as text'],
+    ['--file', 'Force input as file path'],
+    ['--provider <provider>', 'Override provider']
+];
+
+function applyCliOptions(program) {
+    for (const opt of CLI_OPTIONS) {
+        program.option(opt[0], opt[1], opt[2]);
+    }
+}
+
+function configureProgram(program) {
     program
         .name('pe2-cli')
-        .description('🚀 KleoSr PE2-CLI: Convert raw prompts to PE2-optimized prompts using adaptive intelligence.')
+        .description('Convert raw prompts to PE2-optimized prompts.')
         .version(CLI_SEMVER)
-        .argument('[input]', 'Text prompt or path to file (optional - if not provided, starts interactive mode)')
-        .option('--model <model>', 'OpenRouter model name (overrides config)')
-        .option('--iterations <number>', 'Number of PE2 refinement rounds (auto-detected if not specified)', parseInt)
-        .option('--output-file <file>', 'Path to the output markdown file')
-        .option('--auto-difficulty', 'Show complexity analysis and exit without processing')
-        .option('-i, --interactive', 'Start in interactive mode')
-        .option('--config', 'Configure API key and model settings')
-        .option('--text', 'Force input to be treated as text (not file path)')
-        .option('--file', 'Force input to be treated as file path')
-        .option('--provider <provider>', 'Override provider for this run (openai|anthropic|google|openrouter|ollama)')
-        .showHelpAfterError('(add --help for additional information)')
+        .argument('[input]', 'Text prompt or file path (optional)')
+        .showHelpAfterError('(add --help for details)')
         .configureOutput({
             outputError: (str, write) => write(themeManager.color('error')(str))
         })
-        .configureHelp({
-            afterAll: `
-Examples:
-  npx @kleosr/pe2-cli                              # Start interactive mode (auto-config)
-  npx @kleosr/pe2-cli --config                     # Configure API key and model
-  npx @kleosr/pe2-cli --interactive                # Start interactive mode
-  npx @kleosr/pe2-cli "Write a Python function"    # Process text directly
-  npx @kleosr/pe2-cli input.txt                    # Process file with saved config
-  npx @kleosr/pe2-cli input.txt --model openai/gpt-4o  # Override model for this run
-  npx @kleosr/pe2-cli "Complex prompt" --iterations 3  # Direct text with specific iterations
-  npx @kleosr/pe2-cli "Test prompt" --auto-difficulty  # Show complexity analysis for text
-  npx @kleosr/pe2-cli "Complex prompt" --provider ollama --model llama3  # Override provider for this run
+        .configureHelp({ afterAll: HELP_TEXT });
+    applyCliOptions(program);
+}
 
-Configuration:
-  First run will prompt for API key and model selection.
-  Settings are saved to ~/.kleosr-pe2/config.json
-  Use --config to reconfigure anytime.
+async function runConfigMode() {
+    setTerminalTitle('KleoSr PE2-CLI - Configuration');
+    displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
+    const versionInfo = `${cliVersionWithPrefix()} • Code ${PE2_CODE_GENERATION}`;
+    const timestamp = new Date().toLocaleString();
+    console.log(themeManager.color('success')(`Configuration Mode | ${versionInfo} | ${timestamp}`));
+    console.log(themeManager.color('primary')('='.repeat(78)));
+    await promptForConfig(themeManager);
+}
 
-Input Methods:
-  1. Direct text: npx @kleosr/pe2-cli "Your prompt here"
-  2. File path: npx @kleosr/pe2-cli input.txt
-  3. Interactive: npx @kleosr/pe2-cli (no arguments)
-  4. Force text: --text flag treats input as text even if it looks like a file
-  5. Force file: --file flag treats input as file path
-            `
-        });
+async function runInteractiveMode(input, options) {
+    await interactiveMode({
+        initialInput: input,
+        cliOptions: options,
+        themeManager,
+        sessionManager,
+        statsTracker,
+        userPreferences
+    });
+}
+
+function handleMainError(error) {
+    if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') {
+        return;
+    }
+    console.error(themeManager.color('error')(error.message));
+    if (error.stack && process.env.DEBUG) {
+        console.error(error.stack);
+    }
+    process.exit(error.exitCode || 1);
+}
+
+async function main() {
+    setTerminalTitle('KleoSr PE2-CLI');
+    const program = new Command();
+    configureProgram(program);
 
     try {
         await program.parseAsync(process.argv);
@@ -78,32 +119,13 @@ Input Methods:
         const input = program.args[0];
 
         if (options.config) {
-            setTerminalTitle('KleoSr PE2-CLI - Configuration');
-            displayBanner({ themeManager, userPreferences, config: loadConfig(), interactive: false });
-            console.log(themeManager.color('success')(`🔧 Configuration Mode | ${cliVersionWithPrefix()} • Code ${PE2_CODE_GENERATION} | ${new Date().toLocaleString()}`));
-            console.log(themeManager.color('primary')('='.repeat(78)));
-
-            await promptForConfig(themeManager);
+            await runConfigMode();
             return;
         }
 
-        await interactiveMode({
-            initialInput: input,
-            cliOptions: options,
-            themeManager,
-            sessionManager,
-            statsTracker,
-            userPreferences
-        });
+        await runInteractiveMode(input, options);
     } catch (error) {
-        if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') {
-            return;
-        }
-        console.error(themeManager.color('error')(`❌ Error: ${error.message}`));
-        if (error.stack && process.env.DEBUG) {
-            console.error(error.stack);
-        }
-        process.exit(error.exitCode || 1);
+        handleMainError(error);
     }
 }
 

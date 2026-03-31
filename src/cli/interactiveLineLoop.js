@@ -5,124 +5,137 @@ import { getProviderClient } from '../providers/index.js';
 import { handleCommand } from './commands.js';
 import { runPromptOptimizationPipeline } from './promptProcessing.js';
 
-function buildCommandContext(state) {
+const EXIT_COMMANDS = new Set(['/exit', '/quit', 'exit', 'quit']);
+const PLAIN_TEXT_COMMANDS = {
+  help: '/help',
+  config: '/settings',
+  status: '/config'
+};
+
+function buildCommandContext(loopState) {
     return {
-        config: state.config,
-        themeManager: state.themeManager,
-        sessionManager: state.sessionManager,
-        userPreferences: state.userPreferences,
-        lastResult: state.lastResult
+        config: loopState.config,
+        themeManager: loopState.themeManager,
+        sessionManager: loopState.sessionManager,
+        userPreferences: loopState.userPreferences,
+        lastResult: loopState.lastResult
     };
 }
 
-function configWithCliOptions(config, cliOptions) {
-    return { ...config, _cliOptions: cliOptions };
+function configWithCliOptions(baseConfig, cliOptions) {
+    return { ...baseConfig, _cliOptions: cliOptions };
 }
 
-async function runOptimizationForPrompt(state, promptText) {
+async function runOptimizationForPrompt(loopState, promptText) {
     const processResult = await runPromptOptimizationPipeline({
         prompt: promptText,
-        client: state.client,
-        config: configWithCliOptions(state.config, state.cliOptions),
-        sessionId: state.sessionCounter++,
-        themeManager: state.themeManager,
-        statsTracker: state.statsTracker,
-        previousOptimizedMarkdown: state.lastResult
+        client: loopState.client,
+        config: configWithCliOptions(loopState.config, loopState.cliOptions),
+        sessionId: loopState.sessionCounter++,
+        themeManager: loopState.themeManager,
+        statsTracker: loopState.statsTracker,
+        previousOptimizedMarkdown: loopState.lastResult
     });
     if (processResult) {
-        state.lastResult = processResult.lastResult;
+        loopState.lastResult = processResult.lastResult;
     }
 }
 
-async function handleSlashCommandLine(state, command) {
-    const validation = validateAndSuggestCommand(command);
-
-    if (!validation.valid && validation.isCommand) {
-        console.log(state.themeManager.color('error')(`✗ ${validation.message}`));
-        state.rl.prompt();
-        return;
+function updateClientFromConfig(loopState, result) {
+    loopState.config = { ...loopState.config, ...result };
+    if (result.provider || result.apiKey) {
+        loopState.client = getProviderClient(
+            loopState.config.provider || 'openrouter',
+            resolveApiKey(loopState.config.provider, loopState.config.apiKey)
+        );
     }
+}
 
-    if (validation.valid) {
-        state.userPreferences.trackCommand(command);
+function handleBatchResult(loopState, batch) {
+    for (const prompt of batch) {
+        console.log(`\nProcessing prompt: ${formatProcessingPromptDisplay(prompt, 80)}`);
+        runOptimizationForPrompt(loopState, prompt);
     }
+}
 
-    if (command === '/exit' || command === '/quit') {
-        console.log(state.themeManager.color('success')('\n✨ Thanks for using KleoSr PE2-CLI! Goodbye!'));
-        state.rl.close();
-        return;
-    }
+function handleInvalidCommand(loopState, validation) {
+    console.log(loopState.themeManager.color('error')(validation.message));
+    loopState.rl.prompt();
+}
 
-    process.stdout.write('\r\x1b[K');
+function handleExitCommand(loopState) {
+    console.log(loopState.themeManager.color('success')('\nThanks for using KleoSr PE2-CLI! Goodbye!'));
+    loopState.rl.close();
+}
 
-    const result = await handleCommand(command, buildCommandContext(state));
-
+function handleCommandResult(loopState, result) {
     if (result?.batch) {
-        for (const prompt of result.batch) {
-            console.log(`\n${state.themeManager.color('info')('Processing prompt:')} ${formatProcessingPromptDisplay(prompt, 80)}`);
-            await runOptimizationForPrompt(state, prompt);
-        }
+        handleBatchResult(loopState, result.batch);
     } else if (result && typeof result === 'object') {
-        state.config = { ...state.config, ...result };
-        if (result.provider || result.apiKey) {
-            state.client = getProviderClient(
-                state.config.provider || 'openrouter',
-                resolveApiKey(state.config.provider, state.config.apiKey)
-            );
-        }
+        updateClientFromConfig(loopState, result);
         displayBanner({
-            themeManager: state.themeManager,
-            userPreferences: state.userPreferences,
+            themeManager: loopState.themeManager,
+            userPreferences: loopState.userPreferences,
             config: loadConfig(),
             interactive: true
         });
     } else if (typeof result === 'string') {
-        await runOptimizationForPrompt(state, result);
+        runOptimizationForPrompt(loopState, result);
     }
-
-    state.rl.prompt();
 }
 
-async function handlePlainTextLine(state, trimmedInput) {
-    if (trimmedInput === 'exit' || trimmedInput === 'quit') {
-        console.log(state.themeManager.color('success')('\n✨ Thanks for using KleoSr PE2-CLI! Goodbye!'));
-        state.rl.close();
+async function handleSlashCommandLine(loopState, command) {
+    const validation = validateAndSuggestCommand(command);
+
+    if (!validation.valid && validation.isCommand) {
+        handleInvalidCommand(loopState, validation);
         return;
     }
 
-    if (trimmedInput === 'help') {
-        await handleCommand('/help', buildCommandContext(state));
-        state.rl.prompt();
+    if (validation.valid) {
+        loopState.userPreferences.trackCommand(command);
+    }
+
+    if (EXIT_COMMANDS.has(command)) {
+        handleExitCommand(loopState);
         return;
     }
 
-    if (trimmedInput === 'config') {
-        await handleCommand('/settings', buildCommandContext(state));
-        state.rl.prompt();
-        return;
-    }
-
-    if (trimmedInput === 'status') {
-        await handleCommand('/config', buildCommandContext(state));
-        state.rl.prompt();
-        return;
-    }
-
-    await runOptimizationForPrompt(state, trimmedInput);
-    state.rl.prompt();
+    process.stdout.write('\r\x1b[K');
+    const result = await handleCommand(command, buildCommandContext(loopState));
+    handleCommandResult(loopState, result);
+    loopState.rl.prompt();
 }
 
-export async function handleInteractiveUserLine(state, trimmedInput) {
+async function handlePlainTextLine(loopState, trimmedInput) {
+    if (EXIT_COMMANDS.has(trimmedInput)) {
+        console.log(loopState.themeManager.color('success')('\nThanks for using KleoSr PE2-CLI! Goodbye!'));
+        loopState.rl.close();
+        return;
+    }
+
+    const mappedCommand = PLAIN_TEXT_COMMANDS[trimmedInput];
+    if (mappedCommand) {
+        await handleCommand(mappedCommand, buildCommandContext(loopState));
+        loopState.rl.prompt();
+        return;
+    }
+
+    await runOptimizationForPrompt(loopState, trimmedInput);
+    loopState.rl.prompt();
+}
+
+export async function handleInteractiveUserLine(loopState, trimmedInput) {
     if (trimmedInput === '') {
-        state.rl.prompt();
+        loopState.rl.prompt();
         return;
     }
 
     if (trimmedInput.startsWith('/')) {
         const command = trimmedInput.toLowerCase().split(' ')[0];
-        await handleSlashCommandLine(state, command);
+        await handleSlashCommandLine(loopState, command);
         return;
     }
 
-    await handlePlainTextLine(state, trimmedInput);
+    await handlePlainTextLine(loopState, trimmedInput);
 }

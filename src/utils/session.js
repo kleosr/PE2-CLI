@@ -41,8 +41,8 @@ export class SessionManager {
 
     loadHistory() {
         return fs.readdirSync(this.sessionDir)
-            .filter(f => f.endsWith('.json'))
-            .map(f => JSON.parse(fs.readFileSync(path.join(this.sessionDir, f), 'utf-8')))
+            .filter(filename => filename.endsWith('.json'))
+            .map(filename => JSON.parse(fs.readFileSync(path.join(this.sessionDir, filename), 'utf-8')))
             .sort((a, b) => b.timestamp - a.timestamp);
     }
 }

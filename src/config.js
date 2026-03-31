@@ -17,8 +17,8 @@ export function loadConfig() {
   ensureConfigDir();
   if (fs.existsSync(CONFIG_FILE)) {
     try {
-      const configData = fs.readFileSync(CONFIG_FILE, 'utf-8');
-      return JSON.parse(configData);
+      const storedConfig = fs.readFileSync(CONFIG_FILE, 'utf-8');
+      return JSON.parse(storedConfig);
     } catch (error) {
       return {};
     }

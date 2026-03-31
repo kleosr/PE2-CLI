@@ -100,7 +100,8 @@ export async function generateInitialPrompt(client, rawPrompt, model) {
   return parsePromptResponse(content, rawPrompt);
 }
 
-export async function refinePrompt(client, currentPromptJson, model, iterationNum) {
+export async function refinePrompt(refineOptions) {
+  const { client, currentPromptJson, model, iterationNum } = refineOptions;
   try {
     const systemContent = LLM_CONFIG.refinementSystemMessage;
     const userContent = getRefinementTemplate(currentPromptJson, iterationNum);
@@ -112,12 +113,84 @@ export async function refinePrompt(client, currentPromptJson, model, iterationNu
         'X-Title': HTTP_HEADERS.title
       }
     });
-    const content = response.choices[0].message.content;
-    const result = parsePromptResponse(content, currentPromptJson);
-    return result.prompt ? { prompt: result.prompt, edits: `Refined prompt based on PE2 principles (Iteration ${iterationNum}).` } : { prompt: null, edits: null };
+    const responseContent = response.choices[0].message.content;
+    const result = parsePromptResponse(responseContent, currentPromptJson);
+    const editsText = `Refined prompt (Iteration ${iterationNum}).`;
+    return result.prompt
+      ? { prompt: result.prompt, edits: editsText }
+      : { prompt: null, edits: null };
   } catch {
     return { prompt: null, edits: null };
   }
+}
+
+function determineOutputFile(config, sessionId) {
+  if (!config._cliOptions?.outputFile && !fs.existsSync(PE2_LOCAL_PROMPTS_DIR)) {
+    fs.mkdirSync(PE2_LOCAL_PROMPTS_DIR, { recursive: true });
+  }
+  if (config._cliOptions?.outputFile) {
+    return path.isAbsolute(config._cliOptions.outputFile)
+      ? config._cliOptions.outputFile
+      : path.join(process.cwd(), config._cliOptions.outputFile);
+  }
+  return path.join(PE2_LOCAL_PROMPTS_DIR, `pe2-session-${sessionId}.md`);
+}
+
+function buildPerformanceMetrics(complexityScore, strategy, refinementHistory) {
+  return {
+    accuracy_gain: `Estimated ${PERFORMANCE_METRICS.accuracyGainBase + complexityScore * PERFORMANCE_METRICS.accuracyGainMultiplier}% improvement`,
+    optimization_level: strategy.focus,
+    quality_score: DEFAULT_EVALUATION.overallScore.toFixed(1),
+    iterations_applied: refinementHistory.length
+  };
+}
+
+async function runRefinementLoop(refinementOptions) {
+  const { client, config, iterations, context, progressBar, refinementHistory, workingPrompt, themeManager } = refinementOptions;
+  const progressRange = PROGRESS_PERCENTAGES.finalization - PROGRESS_PERCENTAGES.initialPromptComplete;
+  const progressPerIteration = progressRange / iterations;
+
+  for (let i = 0; i < iterations; i++) {
+    const iterationNum = i + 2;
+    const taskText = `Adaptive refinement (${iterationNum}/${iterations + 1}) for ${context.domain}`;
+    progressBar.update(PROGRESS_PERCENTAGES.initialPromptComplete + i * progressPerIteration, { task: taskText });
+    const currentPromptJson = JSON.stringify(workingPrompt, null, 2);
+    const { prompt: refinedPrompt, edits } = await refinePrompt({
+      client, currentPromptJson, model: config.model, iterationNum
+    });
+    if (!refinedPrompt) {
+      console.log(themeManager?.color('warning')(`\nRefinement ${iterationNum} failed, using previous version.`));
+      break;
+    }
+    workingPrompt = refinedPrompt;
+    refinementHistory.push({ iteration: iterationNum, edits });
+  }
+  return workingPrompt;
+}
+
+async function initializeProcessing(sessionId, themeManager, prompt) {
+  setTerminalTitle(`KleoSr PE2-CLI - Processing Session ${sessionId}`);
+  console.log(themeManager.color('info')(`\n⚡ Processing Session ${sessionId} (${prompt.length} chars)...`));
+  const progressBar = createProgressBar();
+  progressBar.start(PROGRESS_PERCENTAGES.complete, PROGRESS_PERCENTAGES.initialization, { task: 'Initializing agentic processing...' });
+  return progressBar;
+}
+
+async function generateInitialPromptWithProgress(client, prompt, model, progressBar, domain) {
+  progressBar.update(PROGRESS_PERCENTAGES.initialPromptStart, { task: `Generating ${domain}-optimized PE² prompt...` });
+  const { prompt: currentPrompt, edits: initialEdits } = await generateInitialPrompt(client, prompt, model);
+  return { currentPrompt, initialEdits };
+}
+
+async function writeOutputFile(outputPath, workingPrompt, refinementHistory, performanceMetrics, difficulty, complexityScore) {
+  const finalOutput = formatMarkdownOutput({
+    pe2Prompt: workingPrompt,
+    history: refinementHistory,
+    metrics: performanceMetrics,
+    difficulty,
+    complexityScore
+  });
+  fs.writeFileSync(outputPath, finalOutput, 'utf-8');
 }
 
 export async function processPrompt({
@@ -135,67 +208,38 @@ export async function processPrompt({
 }) {
   let progressBar = null;
   try {
-    setTerminalTitle(`KleoSr PE2-CLI - Processing Session ${sessionId}`);
-
-    console.log(themeManager.color('info')(`\n⚡ Processing Session ${sessionId} (${prompt.length} chars)...`));
-
-    progressBar = createProgressBar();
-    progressBar.start(PROGRESS_PERCENTAGES.complete, PROGRESS_PERCENTAGES.initialization, { task: 'Initializing agentic processing...' });
+    progressBar = await initializeProcessing(sessionId, themeManager, prompt);
 
     const refinementHistory = [];
-    progressBar.update(PROGRESS_PERCENTAGES.initialPromptStart, { task: `Generating ${context.domain}-optimized PE² prompt...` });
-    const { prompt: currentPrompt, edits: initialEdits } = await generateInitialPrompt(client, prompt, config.model);
+    const { currentPrompt, initialEdits } = await generateInitialPromptWithProgress(
+      client, prompt, config.model, progressBar, context.domain
+    );
     if (!currentPrompt) {
       progressBar.stop();
-      progressBar = null;
       return { success: false };
     }
     refinementHistory.push({ iteration: 1, edits: initialEdits });
     let workingPrompt = currentPrompt;
     progressBar.update(PROGRESS_PERCENTAGES.initialPromptComplete, { task: 'Initial prompt generated' });
 
-    const progressRange = PROGRESS_PERCENTAGES.finalization - PROGRESS_PERCENTAGES.initialPromptComplete;
-    const progressPerIteration = progressRange / iterations;
-    for (let i = 0; i < iterations; i++) {
-      const iterationNum = i + 2;
-      progressBar.update(PROGRESS_PERCENTAGES.initialPromptComplete + i * progressPerIteration, { task: `Adaptive refinement (${iterationNum}/${iterations + 1}) for ${context.domain}...` });
-      const currentPromptJson = JSON.stringify(workingPrompt, null, 2);
-      const { prompt: refinedPrompt, edits } = await refinePrompt(client, currentPromptJson, config.model, iterationNum);
-      if (!refinedPrompt) {
-        console.log(themeManager.color('warning')(`\nRefinement ${iterationNum} failed, using previous version.`));
-        break;
-      }
-      workingPrompt = refinedPrompt;
-      refinementHistory.push({ iteration: iterationNum, edits });
-    }
+    workingPrompt = await runRefinementLoop({
+      client, config, iterations, context,
+      progressBar, refinementHistory, workingPrompt, themeManager
+    });
 
     progressBar.update(PROGRESS_PERCENTAGES.finalization, { task: 'Finalizing agentic output...' });
-    const evaluation = DEFAULT_EVALUATION;
-    const performanceMetrics = {
-      accuracy_gain: `Estimated ${PERFORMANCE_METRICS.accuracyGainBase + complexityScore * PERFORMANCE_METRICS.accuracyGainMultiplier}% improvement`,
-      optimization_level: strategy.focus,
-      quality_score: evaluation.overallScore.toFixed(1),
-      iterations_applied: refinementHistory.length
-    };
+    const performanceMetrics = buildPerformanceMetrics(complexityScore, strategy, refinementHistory);
+    const outputFile = determineOutputFile(config, sessionId);
 
-    if (!config._cliOptions?.outputFile && !fs.existsSync(PE2_LOCAL_PROMPTS_DIR)) {
-      fs.mkdirSync(PE2_LOCAL_PROMPTS_DIR, { recursive: true });
-    }
-    const outputFile = config._cliOptions?.outputFile
-      ? (path.isAbsolute(config._cliOptions.outputFile) ? config._cliOptions.outputFile : path.join(process.cwd(), config._cliOptions.outputFile))
-      : path.join(PE2_LOCAL_PROMPTS_DIR, `pe2-session-${sessionId}.md`);
-
-    const finalOutput = formatMarkdownOutput(workingPrompt, refinementHistory, performanceMetrics, difficulty, complexityScore);
-    fs.writeFileSync(outputFile, finalOutput, 'utf-8');
+    await writeOutputFile(outputFile, workingPrompt, refinementHistory, performanceMetrics, difficulty, complexityScore);
     statsTracker.track(config.model, complexityScore, 0);
 
     progressBar.update(PROGRESS_PERCENTAGES.complete, { task: 'Complete!' });
     progressBar.stop();
-    progressBar = null;
     setTerminalTitle('KleoSr PE²-CLI - Interactive Mode');
     return { success: true, outputFile, refinementHistory };
   } catch (error) {
-    if (progressBar) { progressBar.stop(); progressBar = null; }
+    if (progressBar) { progressBar.stop(); }
     setTerminalTitle('KleoSr PE²-CLI - Interactive Mode');
     throw error;
   }

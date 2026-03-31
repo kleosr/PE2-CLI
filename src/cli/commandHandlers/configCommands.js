@@ -14,28 +14,17 @@ export async function handleSettings(ctx) {
     return config;
 }
 
-export async function handleConfig(ctx) {
-    const { config, themeManager } = ctx;
-    setTerminalTitle('KleoSr PE2-CLI - Current Configuration');
-    console.log('\n' + themeManager.color('info')('Current Configuration:'));
+function buildConfigRows(config, themeManager) {
+    return [
+        ['Provider', config.provider ?? 'Not set'],
+        ['Model', config.model ?? 'Not set'],
+        [config.provider === 'ollama' ? 'Base URL' : 'API Key', formatApiKeyDisplay(config.apiKey)],
+        ['Theme', themeManager.currentTheme]
+    ];
+}
 
-    const configTerminalWidth = process.stdout.columns || UI_CONFIG.terminalWidth.default;
-    const useMinimalConfig = configTerminalWidth < UI_CONFIG.terminalWidth.compactThreshold;
-
-    const configTable = createTable(
-        themeManager,
-        ['Setting', 'Value'],
-        [
-            ['Provider', config.provider ?? 'Not set'],
-            ['Model', config.model ?? 'Not set'],
-            [config.provider === 'ollama' ? 'Base URL' : 'API Key', formatApiKeyDisplay(config.apiKey)],
-            ['Theme', themeManager.currentTheme]
-        ],
-        { minimal: useMinimalConfig, compact: true }
-    );
-    console.log(configTable);
-
-    if (config.apiKey) {
+function displayConfigTips(themeManager, hasApiKey) {
+    if (hasApiKey) {
         console.log(themeManager.color('muted')('\n💡 Tips:'));
         console.log(themeManager.color('muted')('  • Use /showkey to reveal full API key'));
         console.log(themeManager.color('muted')('  • Use /model to quickly switch models'));
@@ -43,58 +32,88 @@ export async function handleConfig(ctx) {
     } else {
         console.log(themeManager.color('warning')('\n⚠️  No API key configured. Use /settings to configure.'));
     }
+}
+
+export async function handleConfig(ctx) {
+    const { config, themeManager } = ctx;
+    setTerminalTitle('KleoSr PE2-CLI - Current Configuration');
+    console.log('\n' + themeManager.color('info')('Current Configuration:'));
+
+    const terminalWidth = process.stdout.columns || UI_CONFIG.terminalWidth.default;
+    const useMinimal = terminalWidth < UI_CONFIG.terminalWidth.compactThreshold;
+
+    const configTable = createTable(
+        themeManager,
+        ['Setting', 'Value'],
+        buildConfigRows(config, themeManager),
+        { minimal: useMinimal, compact: true }
+    );
+    console.log(configTable);
+
+    displayConfigTips(themeManager, !!config.apiKey);
     setTerminalTitle('KleoSr PE2-CLI - Interactive Mode');
+}
+
+async function promptForCustomModel() {
+    const { customModel } = await inquirer.prompt([{
+        type: 'input',
+        name: 'customModel',
+        message: 'Enter custom model name:',
+        validate: (input) => input.trim() ? true : 'Model name required'
+    }]);
+    return customModel.trim();
+}
+
+function buildModelChoices(providerConfig) {
+    return providerConfig.models.map(modelName => ({
+        name: modelName,
+        value: modelName
+    }));
+}
+
+async function selectFromModelList(providerConfig) {
+    const { selectedModel } = await inquirer.prompt([{
+        type: 'list',
+        name: 'selectedModel',
+        message: 'Select a model:',
+        choices: [
+            ...buildModelChoices(providerConfig),
+            { name: 'Enter Custom Model', value: 'custom' }
+        ]
+    }]);
+    return selectedModel;
+}
+
+async function resolveModelChoice(providerConfig) {
+    const selected = await selectFromModelList(providerConfig);
+    return selected === 'custom' ? await promptForCustomModel() : selected;
+}
+
+async function handleModelSelection(config) {
+    const providerConfig = PROVIDERS[config.provider];
+    if (!providerConfig) return;
+    config.model = await resolveModelChoice(providerConfig);
 }
 
 export async function handleModel(ctx) {
     const { config, themeManager } = ctx;
     process.stdout.write('\r\x1b[K');
     setTerminalTitle('KleoSr PE2-CLI - Model Selection');
-    const { quickModel } = await inquirer.prompt([
-        {
-            type: 'input',
-            name: 'quickModel',
-            message: 'Enter model name (or press Enter to select from list):',
-        }
-    ]);
+
+    const { quickModel } = await inquirer.prompt([{
+        type: 'input',
+        name: 'quickModel',
+        message: 'Enter model name (or press Enter to select from list):',
+    }]);
 
     if (quickModel.trim()) {
         config.model = quickModel.trim();
-        saveConfig(config);
-        console.log(themeManager.color('success')(`✓ Model changed to: ${config.model}`));
     } else {
-        const providerConfig = PROVIDERS[config.provider];
-        if (providerConfig) {
-            const { selectedModel } = await inquirer.prompt([
-                {
-                    type: 'list',
-                    name: 'selectedModel',
-                    message: 'Select a model:',
-                    choices: [
-                        ...providerConfig.models.map(m => ({ name: m, value: m })),
-                        { name: '📝 Enter Custom Model', value: 'custom' }
-                    ]
-                }
-            ]);
-
-            if (selectedModel === 'custom') {
-                const { customModel } = await inquirer.prompt([
-                    {
-                        type: 'input',
-                        name: 'customModel',
-                        message: 'Enter custom model name:',
-                        validate: (input) => input.trim() ? true : 'Model name required'
-                    }
-                ]);
-                config.model = customModel.trim();
-            } else {
-                config.model = selectedModel;
-            }
-
-            saveConfig(config);
-            console.log(themeManager.color('success')(`✓ Model changed to: ${config.model}`));
-        }
+        await handleModelSelection(config);
     }
+
+    saveConfig(config);
+    console.log(themeManager.color('success')(`Model changed to: ${config.model}`));
     setTerminalTitle('KleoSr PE2-CLI - Interactive Mode');
     return config;
 }

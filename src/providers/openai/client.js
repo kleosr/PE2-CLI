@@ -8,6 +8,8 @@ export function createOpenAIClient(apiKey, baseURL = 'https://api.openai.com/v1'
   return new OpenAI({
     apiKey,
     baseURL,
-    defaultHeaders: buildOpenRouterStyleHeaders()
+    defaultHeaders: buildOpenRouterStyleHeaders(),
+    timeout: 30000,
+    maxRetries: 3
   });
 }
