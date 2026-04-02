@@ -1,5 +1,7 @@
+import { DEFAULT_OPENROUTER_MODEL } from './providers/openrouter/modelIds.js';
+
 export const DEFAULT_CONFIG = {
-  model: 'openai/gpt-4o-mini',
+  model: DEFAULT_OPENROUTER_MODEL,
   provider: 'openrouter',
   apiKey: null
 };

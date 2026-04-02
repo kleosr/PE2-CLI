@@ -5,7 +5,12 @@ import { assertNonEmptyString } from '../src/providers/assertNonEmptyString.js';
 import { buildOpenRouterStyleHeaders } from '../src/providers/openRouterHeaders.js';
 import { createOllamaClient } from '../src/providers/ollama/client.js';
 import { createOpenRouterClient } from '../src/providers/openrouter/client.js';
-import { getProviderClient } from '../src/providers/index.js';
+import { getProviderClient, PROVIDERS } from '../src/providers/index.js';
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  OPENROUTER_MODEL_IDS,
+  resolveOpenRouterModelId
+} from '../src/providers/openrouter/modelIds.js';
 
 describe('assertNonEmptyString', () => {
   test('throws for empty, whitespace-only, null, undefined', () => {
@@ -31,6 +36,24 @@ describe('buildOpenRouterStyleHeaders', () => {
     const headers = buildOpenRouterStyleHeaders({ 'X-Custom': 'v' });
     assert.equal(headers['HTTP-Referer'], HTTP_HEADERS.referer);
     assert.equal(headers['X-Custom'], 'v');
+  });
+});
+
+describe('resolveOpenRouterModelId', () => {
+  test('returns default when empty or nullish', () => {
+    assert.equal(resolveOpenRouterModelId(''), DEFAULT_OPENROUTER_MODEL);
+    assert.equal(resolveOpenRouterModelId(null), DEFAULT_OPENROUTER_MODEL);
+    assert.equal(resolveOpenRouterModelId(undefined), DEFAULT_OPENROUTER_MODEL);
+  });
+
+  test('trims whitespace and passes through slugs', () => {
+    assert.equal(resolveOpenRouterModelId('  openai/gpt-5.4  '), 'openai/gpt-5.4');
+  });
+});
+
+describe('OpenRouter model catalog', () => {
+  test('PROVIDERS.openrouter.models matches OPENROUTER_MODEL_IDS', () => {
+    assert.deepEqual(PROVIDERS.openrouter.models, OPENROUTER_MODEL_IDS);
   });
 });
 
@@ -68,6 +91,19 @@ describe('createOpenRouterClient with mocked fetch', () => {
 
   test('throws when api key missing', () => {
     assert.throws(() => createOpenRouterClient({ apiKey: '' }), /OpenRouter API key is required/);
+  });
+
+  test('uses default model id when model is omitted', async () => {
+    let parsedBody;
+    globalThis.fetch = async (_url, init) => {
+      parsedBody = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'x' } }] }) };
+    };
+    const client = createOpenRouterClient({ apiKey: 'k' });
+    await client.chat.completions.create({
+      messages: [{ role: 'user', content: 'hi' }]
+    });
+    assert.equal(parsedBody.model, DEFAULT_OPENROUTER_MODEL);
   });
 
   test('POSTs JSON body and returns parsed JSON on success', async () => {
