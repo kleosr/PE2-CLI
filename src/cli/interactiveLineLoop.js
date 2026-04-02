@@ -51,10 +51,10 @@ function updateClientFromConfig(loopState, result) {
     }
 }
 
-function handleBatchResult(loopState, batch) {
+async function handleBatchResult(loopState, batch) {
     for (const prompt of batch) {
         console.log(`\nProcessing prompt: ${formatProcessingPromptDisplay(prompt, 80)}`);
-        runOptimizationForPrompt(loopState, prompt);
+        await runOptimizationForPrompt(loopState, prompt);
     }
 }
 
@@ -68,9 +68,9 @@ function handleExitCommand(loopState) {
     loopState.rl.close();
 }
 
-function handleCommandResult(loopState, result) {
+async function handleCommandResult(loopState, result) {
     if (result?.batch) {
-        handleBatchResult(loopState, result.batch);
+        await handleBatchResult(loopState, result.batch);
     } else if (result && typeof result === 'object') {
         updateClientFromConfig(loopState, result);
         displayBanner({
@@ -80,7 +80,7 @@ function handleCommandResult(loopState, result) {
             interactive: true
         });
     } else if (typeof result === 'string') {
-        runOptimizationForPrompt(loopState, result);
+        await runOptimizationForPrompt(loopState, result);
     }
 }
 
@@ -103,7 +103,7 @@ async function handleSlashCommandLine(loopState, command) {
 
     process.stdout.write('\r\x1b[K');
     const result = await handleCommand(command, buildCommandContext(loopState));
-    handleCommandResult(loopState, result);
+    await handleCommandResult(loopState, result);
     loopState.rl.prompt();
 }
 

@@ -1,6 +1,7 @@
 import { assertNonEmptyString } from '../assertNonEmptyString.js';
 import { DEFAULT_CHAT_COMPLETION_MAX_TOKENS } from '../defaults.js';
 import { buildOpenRouterStyleHeaders } from '../openRouterHeaders.js';
+import { resolveOpenRouterModelId } from './modelIds.js';
 
 function normalizedBaseUrl(baseURL) {
   return baseURL.replace(/\/$/, '');
@@ -12,7 +13,7 @@ function openRouterChatCompletionsUrl(baseURL) {
 
 function buildChatCompletionBody(options) {
   return {
-    model: options.model,
+    model: resolveOpenRouterModelId(options.model),
     messages: options.messages,
     max_tokens: options.max_tokens ?? DEFAULT_CHAT_COMPLETION_MAX_TOKENS,
     temperature: options.temperature,

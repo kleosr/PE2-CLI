@@ -96,32 +96,34 @@ export async function generateInitialPrompt(client, rawPrompt, model) {
     max_tokens: LLM_CONFIG.maxTokens,
     temperature: LLM_CONFIG.temperature
   });
-  const content = response.choices[0].message.content;
+  const content = response.choices?.[0]?.message?.content;
+  if (content == null || String(content).trim() === '') {
+    throw new Error('Model returned empty content for initial prompt');
+  }
   return parsePromptResponse(content, rawPrompt);
 }
 
 export async function refinePrompt(refineOptions) {
   const { client, currentPromptJson, model, iterationNum } = refineOptions;
-  try {
-    const systemContent = LLM_CONFIG.refinementSystemMessage;
-    const userContent = getRefinementTemplate(currentPromptJson, iterationNum);
-    const response = await client.chat.completions.create({
-      model,
-      messages: buildMessages({ system: systemContent, user: userContent }),
-      headers: {
-        'HTTP-Referer': HTTP_HEADERS.referer,
-        'X-Title': HTTP_HEADERS.title
-      }
-    });
-    const responseContent = response.choices[0].message.content;
-    const result = parsePromptResponse(responseContent, currentPromptJson);
-    const editsText = `Refined prompt (Iteration ${iterationNum}).`;
-    return result.prompt
-      ? { prompt: result.prompt, edits: editsText }
-      : { prompt: null, edits: null };
-  } catch {
-    return { prompt: null, edits: null };
+  const systemContent = LLM_CONFIG.refinementSystemMessage;
+  const userContent = getRefinementTemplate(currentPromptJson, iterationNum);
+  const response = await client.chat.completions.create({
+    model,
+    messages: buildMessages({ system: systemContent, user: userContent }),
+    headers: {
+      'HTTP-Referer': HTTP_HEADERS.referer,
+      'X-Title': HTTP_HEADERS.title
+    }
+  });
+  const responseContent = response.choices?.[0]?.message?.content;
+  if (responseContent == null || String(responseContent).trim() === '') {
+    throw new Error('Model returned empty content during refinement');
   }
+  const result = parsePromptResponse(responseContent, currentPromptJson);
+  const editsText = `Refined prompt (Iteration ${iterationNum}).`;
+  return result.prompt
+    ? { prompt: result.prompt, edits: editsText }
+    : { prompt: null, edits: null };
 }
 
 function determineOutputFile(config, sessionId) {
@@ -155,11 +157,20 @@ async function runRefinementLoop(refinementOptions) {
     const taskText = `Adaptive refinement (${iterationNum}/${iterations + 1}) for ${context.domain}`;
     progressBar.update(PROGRESS_PERCENTAGES.initialPromptComplete + i * progressPerIteration, { task: taskText });
     const currentPromptJson = JSON.stringify(workingPrompt, null, 2);
-    const { prompt: refinedPrompt, edits } = await refinePrompt({
-      client, currentPromptJson, model: config.model, iterationNum
-    });
+    let refinedPrompt;
+    let edits;
+    try {
+      ({ prompt: refinedPrompt, edits } = await refinePrompt({
+        client, currentPromptJson, model: config.model, iterationNum
+      }));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.log(themeManager?.color('warning')(`\nRefinement ${iterationNum} failed: ${msg}`));
+      console.log(themeManager?.color('muted')('Using previous prompt version.'));
+      break;
+    }
     if (!refinedPrompt) {
-      console.log(themeManager?.color('warning')(`\nRefinement ${iterationNum} failed, using previous version.`));
+      console.log(themeManager?.color('warning')(`\nRefinement ${iterationNum} produced no structured prompt, using previous version.`));
       break;
     }
     workingPrompt = refinedPrompt;

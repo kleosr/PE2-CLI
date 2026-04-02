@@ -85,16 +85,23 @@ async function createApiClient(config, themeManager, rl) {
     }
 }
 
-async function initializeApiClient(config, themeManager, initialInput, cliOptions, rl) {
+async function resolveClientForInteractiveSession(themeManager, initialInput, cliOptions, rl) {
+    let config = mergeConfigWithCliOptions({ ...getDefaultConfig(), ...loadConfig() }, cliOptions);
+
     if (!config.apiKey) {
         if (initialInput && !cliOptions.interactive) {
             console.log(themeManager.color('error')('No API key configured. Set environment variable or run with --config.'));
             rl.close();
             return null;
         }
-        return promptForInitialConfig(themeManager, rl);
+        const wizardConfig = await promptForInitialConfig(themeManager, rl);
+        if (!wizardConfig) return null;
+        config = mergeConfigWithCliOptions({ ...getDefaultConfig(), ...loadConfig() }, cliOptions);
     }
-    return createApiClient(config, themeManager, rl);
+
+    const client = await createApiClient(config, themeManager, rl);
+    if (!client) return null;
+    return { client, config };
 }
 
 function createReadlineInterface(themeManager) {
@@ -172,9 +179,15 @@ export async function interactiveMode(session) {
     displayBanner({ themeManager: session.themeManager, userPreferences: session.userPreferences, config: loadConfig(), interactive: true });
     const rl = createReadlineInterface(session.themeManager);
 
-    const config = mergeConfigWithCliOptions({ ...getDefaultConfig(), ...loadConfig() }, session.cliOptions);
-    const client = await initializeApiClient(config, session.themeManager, session.initialInput, session.cliOptions, rl);
-    if (!client) return;
+    const resolved = await resolveClientForInteractiveSession(
+        session.themeManager,
+        session.initialInput,
+        session.cliOptions,
+        rl
+    );
+    if (!resolved) return;
+
+    const { client, config } = resolved;
 
     const loopState = {
         rl,

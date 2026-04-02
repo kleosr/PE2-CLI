@@ -37,7 +37,7 @@ npx @kleosr/pe2-cli --config
 npx @kleosr/pe2-cli "Your prompt as plain text"
 npx @kleosr/pe2-cli path/to/prompt.txt
 npx @kleosr/pe2-cli "Some text" --iterations 3
-npx @kleosr/pe2-cli "Some text" --provider ollama --model llama3
+npx @kleosr/pe2-cli "Some text" --provider ollama --model llama3.3
 npx @kleosr/pe2-cli "Some text" --auto-difficulty
 ```
 
@@ -51,7 +51,15 @@ npx @kleosr/pe2-cli --help
 
 Settings are stored in `~/.kleosr-pe2/config.json` (Unix) or the equivalent under your user profile on Windows. Run `--config` to change provider, model, and API key.
 
-Supported providers in code: `openai`, `anthropic`, `google`, `openrouter`, `ollama`. Default in the project constants targets OpenRouter with a small model id; you can override per run with `--provider` and `--model`.
+Supported providers in code: `openai`, `anthropic`, `google`, `openrouter`, `ollama`. Defaults target current-generation model IDs (see `src/providers/index.js`); override with `--provider` and `--model`.
+
+**Official model references (verify IDs before production):**
+
+- [OpenAI models](https://platform.openai.com/docs/models)
+- [Anthropic Claude models](https://docs.anthropic.com/en/docs/about-claude/models/overview)
+- [Google Gemini models](https://ai.google.dev/gemini-api/docs/models)
+- [OpenRouter model directory](https://openrouter.ai/models)
+- [Ollama library](https://ollama.com/library) (local tags vary by what you have pulled)
 
 ## Output
 

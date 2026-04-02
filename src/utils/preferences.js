@@ -17,7 +17,9 @@ export class UserPreferences {
             try {
                 const storedPrefs = fs.readFileSync(this.prefsFile, 'utf-8');
                 return JSON.parse(storedPrefs);
-            } catch {
+            } catch (error) {
+                const reason = error instanceof Error ? error.message : String(error);
+                console.warn(`Warning: could not load ${this.prefsFile} (${reason}). Using defaults.`);
             }
         }
         
@@ -41,7 +43,9 @@ export class UserPreferences {
     save() {
         try {
             writeJsonFileAtomically(this.prefsFile, this.preferences);
-        } catch {
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            console.warn(`Warning: could not save ${this.prefsFile} (${reason}).`);
         }
     }
 
