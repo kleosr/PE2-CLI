@@ -3,50 +3,72 @@ import { createAnthropicClient } from './anthropic/client.js';
 import { createGoogleClient } from './google/client.js';
 import { createOllamaClient } from './ollama/client.js';
 import { createOpenRouterClient } from './openrouter/client.js';
+import { DEFAULT_OPENROUTER_MODEL, OPENROUTER_MODEL_IDS } from './openrouter/modelIds.js';
 
 export const PROVIDERS = {
   openai: {
     name: 'OpenAI',
     baseURL: 'https://api.openai.com/v1',
+    docsUrl: 'https://platform.openai.com/docs/models',
     models: [
-      'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo',
+      'gpt-5.4',
+      'gpt-5.4-mini',
+      'gpt-5.4-nano',
+      'gpt-5.2'
     ],
-    defaultModel: 'gpt-4o-mini',
+    defaultModel: 'gpt-5.4-mini',
     keyLabel: 'OpenAI API Key'
   },
   anthropic: {
     name: 'Anthropic (Claude)',
     baseURL: 'https://api.anthropic.com/v1',
+    docsUrl: 'https://docs.anthropic.com/en/docs/about-claude/models/overview',
     models: [
-      'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229',
+      'claude-opus-4-6',
+      'claude-sonnet-4-6',
+      'claude-haiku-4-5'
     ],
-    defaultModel: 'claude-3-5-sonnet-20241022',
+    defaultModel: 'claude-sonnet-4-6',
     keyLabel: 'Anthropic API Key'
   },
   google: {
     name: 'Google (Gemini)',
     baseURL: 'https://generativelanguage.googleapis.com/v1beta',
+    docsUrl: 'https://ai.google.dev/gemini-api/docs/models',
     models: [
-      'gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-1.0-pro'
+      'gemini-3.1-pro-preview',
+      'gemini-3-flash-preview',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite'
     ],
-    defaultModel: 'gemini-1.5-flash-latest',
+    defaultModel: 'gemini-2.5-flash',
     keyLabel: 'Google AI API Key'
   },
   openrouter: {
     name: 'OpenRouter (Multi-Provider)',
     baseURL: 'https://openrouter.ai/api/v1',
-    models: [
-      'openai/gpt-4o', 'openai/gpt-4o-mini', 'openai/gpt-4-turbo', 'openai/gpt-4', 'openai/gpt-3.5-turbo',
-      'anthropic/claude-3-5-sonnet', 'anthropic/claude-3-opus', 'google/gemini-1.5-pro-latest'
-    ],
-    defaultModel: 'openai/gpt-4o-mini',
+    docsUrl: 'https://openrouter.ai/models',
+    models: [...OPENROUTER_MODEL_IDS],
+    defaultModel: DEFAULT_OPENROUTER_MODEL,
     keyLabel: 'OpenRouter API Key'
   },
   ollama: {
     name: 'Ollama (Local)',
     baseURL: 'http://localhost:11434',
-    models: ['llama3.2', 'llama3.1', 'mistral', 'mixtral', 'codellama', 'deepseek-coder', 'custom'],
-    defaultModel: 'llama3.2',
+    docsUrl: 'https://github.com/ollama/ollama/blob/main/README.md',
+    models: [
+      'llama3.3',
+      'llama3.2',
+      'mistral',
+      'mixtral',
+      'qwen2.5',
+      'deepseek-coder-v2',
+      'phi4',
+      'codellama',
+      'custom'
+    ],
+    defaultModel: 'llama3.3',
     keyLabel: 'Ollama Base URL'
   }
 };

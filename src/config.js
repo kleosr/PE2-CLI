@@ -20,6 +20,8 @@ export function loadConfig() {
       const storedConfig = fs.readFileSync(CONFIG_FILE, 'utf-8');
       return JSON.parse(storedConfig);
     } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(`Warning: could not load ${CONFIG_FILE} (${reason}). Using defaults until fixed.`);
       return {};
     }
   }
@@ -33,6 +35,8 @@ export function saveConfig(config) {
     fs.chmodSync(CONFIG_FILE, FILE_PERMISSIONS.configFile);
     return true;
   } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`Warning: could not save ${CONFIG_FILE} (${reason}).`);
     return false;
   }
 }
