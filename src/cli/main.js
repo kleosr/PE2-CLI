@@ -29,7 +29,7 @@ Examples:
   npx @kleosr/pe2-cli --config                     # Configure API key
   npx @kleosr/pe2-cli "Write a Python function"    # Process text
   npx @kleosr/pe2-cli input.txt                    # Process file
-  npx @kleosr/pe2-cli input.txt --model openai/gpt-4o  # Override model
+  npx @kleosr/pe2-cli input.txt --model openai/gpt-5.4-mini  # Override model
   npx @kleosr/pe2-cli "Complex prompt" --iterations 3
 
 Configuration:
