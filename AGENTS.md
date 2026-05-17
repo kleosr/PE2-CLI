@@ -1,66 +1,88 @@
 # PE2-CLI Knowledge Base
 
 **Generated:** 2026-05-17
-**Stack:** Node.js ESM CLI (no TypeScript)
+**Stack:** Rust workspace (5 crates, ~3,200 LOC, 36 source files)
 
 ## Overview
 
-CLI tool converting raw prompts into PE2-optimized prompts via configurable LLM providers (OpenAI, Anthropic, Google, OpenRouter, Ollama).
+CLI tool converting raw prompts into PE2-optimized prompts via configurable LLM providers (OpenAI, Anthropic, Google, OpenRouter, Ollama). Rust implementation — single static binary, zero GC, tokio async.
 
 ## Structure
 
 ```
 ./
-├── src/           # Application source (14 entries, 5 subdirs)
-├── tests/         # Test files (6 *.test.js, node --test runner)
-├── scripts/       # CI helper scripts
-├── .github/       # CI workflow (publish-only on v* tag)
-└── .sisyphus/     # Agent orchestration state
+├── Cargo.toml            # Workspace root (version 4.0.2, edition 2021)
+├── crates/
+│   ├── pe2-core/         # Core engine: config, analysis, pipeline, templates, session, stats (14 modules)
+│   ├── pe2-providers/    # 5 LLM provider adapters (9 modules, adapter pattern)
+│   ├── pe2-tui/          # Terminal UI: banner, spinner, interactive REPL (crossterm)
+│   ├── pe2-cli/          # CLI binary: clap args, command routing (entry point)
+│   └── pe2-bindings/     # napi-rs bridge (optional, Node.js native addon)
+├── npm/                  # npm meta-package (@kleosr/pe2-cli)
+├── .github/workflows/    # CI: cargo test + matrix build on v* tag
 ```
 
 ## Where To Look
 
 | Task | Location | Notes |
 |------|----------|-------|
-| CLI entry point | `src/cli/main.js` | bin entry, commander setup |
-| Config loading | `src/config.js` | JSON file at ~/.kleosr-pe2/config.json |
-| Prompt processing | `src/engine.js` | Core LLM pipeline |
-| Provider clients | `src/providers/{name}/client.js` | 5 providers, adapter pattern |
-| Interactive loop | `src/cli/interactive.js` | readline-based REPL |
-| Slash commands | `src/cli/commandHandlers/` | 4 command handlers + registry |
-| Utilities | `src/utils/` | 7 modules (session, stats, preferences, etc.) |
+| CLI entry | `crates/pe2-cli/src/main.rs` | clap arg parsing, dispatch |
+| CLI args | `crates/pe2-cli/src/args.rs` | Clap derive structs |
+| Core engine | `crates/pe2-core/src/engine.rs` | LLM pipeline, refinement loop |
+| Config | `crates/pe2-core/src/config.rs` | JSON config at ~/.kleosr-pe2/ |
+| Analysis | `crates/pe2-core/src/analysis.rs` | Prompt complexity scoring |
+| Providers | `crates/pe2-providers/src/` | 5 adapters (openai, anthropic, google, ollama, openrouter) |
+| Provider factory | `crates/pe2-providers/src/factory.rs` | Runtime provider selection |
+| Interactive loop | `crates/pe2-tui/src/interactive.rs` | Readline REPL with /commands |
+| Display/UI | `crates/pe2-tui/src/display.rs` | Themed output, spinners |
+| Session mgmt | `crates/pe2-core/src/session.rs` | Persistent session state |
+| Stats | `crates/pe2-core/src/stats.rs` | Usage metrics |
+| Preferences | `crates/pe2-core/src/preferences.rs` | User preferences |
+| Templates | `crates/pe2-core/src/templates.rs` | PE2 prompt templates |
+| Integration tests | `crates/pe2-core/tests/`, `crates/pe2-providers/tests/` | Cargo test |
+| npm package | `npm/package.json` | Meta-package with platform optional deps |
 
 ## Conventions
 
-- **ESM only** — all imports include `.js` extension
-- **2-space indent, no semicolons, single quotes, trailing commas**
-- **camelCase** for identifiers, **PascalCase** for classes, **UPPER_SNAKE_CASE** for constants
-- **async/await** only — no `.then()` chains
-- **Atomic JSON writes** via `writeJsonFileAtomically()` for all persistent state
-- **Provider adapters normalize** to `{ choices: [{ message: { content } }] }`
-- Tests use **Node `node:test`** + `node:assert/strict` — no test libraries
-- Node **>=18.17.0** required
+- **Rust edition 2021**, crate resolver = "2"
+- **snake_case** for functions/variables, **PascalCase** for types/traits/enums, **SCREAMING_SNAKE_CASE** for constants
+- **async/await** with **tokio** runtime (full features)
+- **anyhow/thiserror** for error handling
+- **serde** for all JSON serialization
+- **reqwest** with rustls-tls for HTTP
+- **Trait-based provider adapter** pattern via `async_trait`
+- Tests use standard **`#[cfg(test)]`** + **`cargo test`** — no test framework
+- **2-space indent**, no trailing whitespace (Rustfmt default)
+- All persistent state written via atomic JSON writes
 
 ## Anti-Patterns (This Project)
 
-- **No linter/formatter** — code style is convention-only, no enforcement
-- **No `engine.js` tests** — core business logic is untested
+- **No rustfmt/clippy CI enforcement** — style is convention-only
 - **No PR CI** — tests only run on tag push (`v*`)
-- **`src/providers/index.js` couples model data + client factory** — violates SRP
-- **`src/cli/interactive.js` is a god module** — 211 lines doing I/O, config, client creation, and pipeline orchestration
-- **No `"files"` or `.npmignore`** — everything (including .sisyphus, scripts) gets published
-- **Deferred saves** in `preferences.js`/`stats.js` can lose last write on crash
+- **interactive.rs is a god module** — 266 lines doing I/O, config, client creation, pipeline
+- **Provider adapter trait is thin** — most logic duplicated across 5 adapters
+- **No `pe2-cli` tests** — binary entry point untested
+- **npm package published without `files` config** — includes build artifacts
+- **Deferred saves** in preferences/stats can lose last write on crash
+- **constants.rs is a megamodule** — 129 lines mixing regex patterns, model data, HTTP defaults, tier thresholds
+- **Session writes skip atomic write** — uses `std::fs::write` directly, inconsistent with rest of persistence
+- **Misleading error mapping** — reqwest errors mapped to `CliError::Json` in all providers
+- **No `.rust-toolchain.toml`** — Rust version only documented in README, not pinned
 
 ## Commands
 
 ```bash
-npm start                # node ./src/cli/main.js
-npm test                 # node --test ./tests/*.test.js
-npx @kleosr/pe2-cli      # Run without global install
+cargo build                  # Build all crates
+cargo test                   # Run all tests
+cargo run -- --help          # Run CLI
+cargo run -- "prompt text"   # One-shot mode
+cargo run -- --config        # Config menu
 ```
 
 ## Notes
 
-- Config stored at `~/.kleosr-pe2/` (3 files: config.json, preferences.json, stats.json + sessions/)
-- Output goes to `./pe2-prompts/` unless `--output-file` is given
-- No `"main"` or `"exports"` in package.json — CLI-only, not importable as library
+- Config stored at `~/.kleosr-pe2/` (config.json, preferences.json, stats.json + sessions/)
+- Output goes to `./pe2-prompts/` unless `--output-file` given
+- npm package at `npm/package.json` is meta-package with optional platform deps (v4.0.1)
+- Node >=18.17.0 required for npm install (native addon via napi-rs)
+- Binary name: `pe2`
