@@ -1,99 +1,143 @@
-# PE2-CLI
+<div align="center">
+  <img src="https://img.shields.io/badge/rust-1.81+-orange?logo=rust&style=flat-square" />
+  <img src="https://img.shields.io/github/v/release/kleosr/PE2-CLI?style=flat-square&color=blue" />
+  <img src="https://img.shields.io/github/actions/workflow/status/kleosr/PE2-CLI/publish.yml?branch=main&style=flat-square" />
+  <img src="https://img.shields.io/github/license/kleosr/PE2-CLI?style=flat-square" />
+  <img src="https://img.shields.io/badge/built%20with-Cursor-6c47ff?style=flat-square" />
+</div>
 
-Command-line tool that takes a rough prompt (text or file), calls a configured LLM, and returns a structured PE2-style prompt. Release line is **4.0.0** (npm semver); the CLI labels the generation as **Code V4** in the banner.
+<br />
 
-Visit at: https://www.npmjs.com/package/@kleosr/pe2-cli
+<div align="center">
+  <h1>PE²-CLI</h1>
+  <p><strong>Structured Prompt Generation — Rust Native</strong></p>
+  <p>Give it a rough idea. Get back a production-ready PE²-structured prompt.<br />Zero GC. True async. Sub-millisecond startup.</p>
+</div>
 
-## Requirements
+<br />
 
-- Node.js 18.17 or newer
+---
 
-You need an API key (or base URL for Ollama) for whichever provider you pick. The tool does not ship bundled models.
-
-## Install
+## 📦 Install
 
 ```bash
+# Via npm (meta-package, no postinstall scripts)
 npm install -g @kleosr/pe2-cli
+
+# From source (requires Rust 1.81+)
+cargo install --git https://github.com/kleosr/PE2-CLI
+
+# Or grab a binary from the releases page
+# https://github.com/kleosr/PE2-CLI/releases
 ```
 
-Or run without a global install:
+## 🚀 Usage
 
 ```bash
-npx @kleosr/pe2-cli --help
+# Interactive mode — just run it
+pe2
+
+# One-shot
+pe2 "Write a blog post about AI"
+
+# From a file
+pe2 path/to/prompt.txt
+
+# With overrides
+pe2 "Explain quantum computing" --provider openai --model gpt-4o --iterations 5
+
+# Config menu
+pe2 --config
 ```
 
-## Usage
+No arguments = interactive mode. First run will prompt you to set up your provider and API key.
 
-No arguments starts interactive mode (and will ask for config on first run if nothing is saved):
+## ⚙️ Configuration
 
-```bash
-npx @kleosr/pe2-cli
+Settings live in `~/.kleosr-pe2/config.json`. Change them through the interactive menu (`/config`) or edit the file directly.
+
+| Flag | What it does |
+|------|-------------|
+| `-p, --provider` | LLM provider: `openai`, `anthropic`, `google`, `openrouter`, `ollama` |
+| `-m, --model` | Model identifier (check your provider's docs) |
+| `--api-key` | Your API key (or set the env var below) |
+| `-o, --output-file` | Where to save the result |
+| `-i, --iterations` | Refinement pass count (auto-detected by default) |
+| `--max-tokens` | Max response tokens (default: 1024) |
+| `--temperature` | Sampling temperature (default: 0.3) |
+
+### Environment Variables
+
+| Provider | Variable |
+|----------|----------|
+| OpenAI | `OPENAI_API_KEY` |
+| Anthropic | `ANTHROPIC_API_KEY` |
+| Google | `GOOGLE_API_KEY` |
+| OpenRouter | `OPENROUTER_API_KEY` |
+| Ollama (local) | `OLLAMA_BASE_URL` |
+
+## 🔄 How It Works
+
+1. **Complexity analysis** — scores your prompt on 5 factors (tech, domain, structure, logic, special chars), maps to difficulty tiers
+2. **LLM call** — sends it with a structured JSON template
+3. **Refinement loop** — auto-detects complexity; simple prompts get 1 pass, technical deep-dives get up to 5
+4. **Output** — writes to `./pe2-prompts/` as markdown with full history and metrics
+
+```json
+{
+  "context": "…",
+  "role": "…",
+  "task": "…",
+  "constraints": "…",
+  "output": "…"
+}
 ```
 
-Other entry points:
+Every prompt is returned as a structured PE² JSON document.
 
-```bash
-npx @kleosr/pe2-cli --config
-npx @kleosr/pe2-cli "Your prompt as plain text"
-npx @kleosr/pe2-cli path/to/prompt.txt
-npx @kleosr/pe2-cli "Some text" --iterations 3
-npx @kleosr/pe2-cli "Some text" --provider ollama --model llama3.3
-npx @kleosr/pe2-cli "Some text" --auto-difficulty
+## 🏗️ Architecture
+
+```
+crates/
+├── pe2-core/       — config, analysis, engine/pipeline, templates
+├── pe2-providers/  — 5 adapters: OpenAI, Anthropic, Google, Ollama, OpenRouter
+├── pe2-tui/        — banner, spinner, themed display, interactive REPL (crossterm)
+├── pe2-cli/        — binary entry: clap args, single-prompt + interactive modes
+└── pe2-bindings/   — napi-rs bridge (optional, Node.js native addon)
 ```
 
-For the full flag list, use:
+Clean dependency chain — no circular deps. ~3,200 lines of Rust across 36 source files.
 
-```bash
-npx @kleosr/pe2-cli --help
-```
-
-## Configuration
-
-Settings are stored in `~/.kleosr-pe2/config.json` (Unix) or the equivalent under your user profile on Windows. Run `--config` to change provider, model, and API key.
-
-Supported providers in code: `openai`, `anthropic`, `google`, `openrouter`, `ollama`. Defaults target current-generation model IDs (see `src/providers/index.js`); override with `--provider` and `--model`.
-
-**Official model references (verify IDs before production):**
-
-- [OpenAI models](https://platform.openai.com/docs/models)
-- [Anthropic Claude models](https://docs.anthropic.com/en/docs/about-claude/models/overview)
-- [Google Gemini models](https://ai.google.dev/gemini-api/docs/models)
-- [OpenRouter model directory](https://openrouter.ai/models)
-- [Ollama library](https://ollama.com/library) (local tags vary by what you have pulled)
-
-## Output
-
-Unless you pass `--output-file`, session output can be written under `pe2-prompts/` in the current working directory (see `src/paths.js` and `src/engine.js`).
-
-## Development
+## 🛠️ Development
 
 ```bash
 git clone https://github.com/kleosr/PE2-CLI.git
 cd PE2-CLI
-npm ci
-npm test
-npm start
+cargo build
+cargo test
+cargo run -- --help
 ```
 
-Tests use Node’s built-in runner: `node --test ./tests/*.test.js`.
+Tests live in `crates/*/tests/`. Run with `cargo test`.
 
-## CI (npm publish)
+## 🤖 CI/CD
 
-Pushing a tag `v*` runs `.github/workflows/publish.yml`. That job needs a GitHub Actions secret named `NPM_TOKEN` (granular npm token with publish access to this package).
+Push a `v*` tag and GitHub Actions:
+1. Runs `cargo test`
+2. Matrix builds across 6 platforms (linux x64/arm64, darwin x64/arm64, windows x64/arm64)
+3. Uploads release tarballs
 
-From a machine where you are logged into GitHub: install [GitHub CLI](https://cli.github.com/) (`winget install GitHub.cli`), run `gh auth login -h github.com -s repo` once, then:
+## 🦀 Why Rust?
 
-```powershell
-.\scripts\set-npm-token-for-actions.ps1
-```
+I wrote the first version in Node.js. It worked, but:
+- **~300ms startup** waiting for the runtime to warm up
+- **GC pauses** during prompt refinement
+- **Callbacks and promises** for concurrency
 
-It only sends the token to GitHub’s API; it does not store it in the repo.
+Rust fixed all of it. Single static binary, ~2ms startup, zero GC, and tokio async everywhere. Five concurrent provider calls? No problem.
 
-## Package
+Built with [Cursor](https://cursor.com).
 
-- npm: [@kleosr/pe2-cli](https://www.npmjs.com/package/@kleosr/pe2-cli)
-- Source: [github.com/kleosr/PE2-CLI](https://github.com/kleosr/PE2-CLI)
+## 📄 License
 
-## License
-
-ISC (see `package.json`).
+ISC

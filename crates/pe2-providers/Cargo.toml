@@ -1,0 +1,19 @@
+[package]
+name = "pe2-providers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+pe2-core = { path = "../pe2-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+once_cell = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
