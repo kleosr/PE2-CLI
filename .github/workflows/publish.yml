@@ -1,8 +1,4 @@
-# Runs on push of a version tag (v*).
-# Repo → Settings → Secrets → Actions: add NPM_TOKEN (npm granular token, read/write on
-# @kleosr/pe2-cli; enable Bypass 2FA on the token if npm asks for 2FA on publish).
-# https://docs.npmjs.com/creating-and-viewing-access-tokens
-name: Publish to npm
+name: Build & Release
 
 on:
   push:
@@ -10,24 +6,101 @@ on:
       - 'v*'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  publish:
+  test:
+    name: Cargo test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test
 
-      - uses: actions/setup-node@v4
+  build:
+    name: Build pe2-${{ matrix.target }}
+    needs: [test]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: pe2-linux-x64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: pe2-linux-arm64
+          - target: x86_64-apple-darwin
+            os: macos-13
+            artifact: pe2-darwin-x64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: pe2-darwin-arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: pe2-win32-x64
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            artifact: pe2-win32-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: '22.14'
-          registry-url: 'https://registry.npmjs.org'
+          targets: ${{ matrix.target }}
 
-      - run: npm ci
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
-      - run: npm test
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Publish to npm
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp target/${{ matrix.target }}/release/pe2.exe dist/${{ matrix.artifact }}.exe
+          else
+            cp target/${{ matrix.target }}/release/pe2 dist/${{ matrix.artifact }}
+          fi
+
+      - name: Create tarball
+        shell: bash
+        run: |
+          cd dist
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            tar czf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }}.exe
+          else
+            tar czf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }}
+          fi
+
+      - name: Upload artifact to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+          body: |
+            PE2-CLI v${{ github.ref_name }}
+
+            ### Installation
+            ```bash
+            # From source (requires Rust toolchain)
+            cargo install --git https://github.com/kleosr/PE2-CLI
+
+            # Or download the binary for your platform from this release
+            ```
+
+            ### Platform binaries
+            See attached assets for your platform.
+
+            ### Quick start
+            ```bash
+            pe2 "Write a blog post about AI"
+            pe2 --config
+            pe2 --help
+            ```
