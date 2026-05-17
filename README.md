@@ -1,8 +1,8 @@
 <div align="center">
   <img src="https://img.shields.io/badge/rust-1.81+-orange?logo=rust&style=flat-square" />
-  <img src="https://img.shields.io/github/v/release/kleosr/PE2-CLI?style=flat-square&color=blue" />
-  <img src="https://img.shields.io/github/actions/workflow/status/kleosr/PE2-CLI/publish.yml?branch=main&style=flat-square" />
-  <img src="https://img.shields.io/github/license/kleosr/PE2-CLI?style=flat-square" />
+  <img src="https://img.shields.io/github/v/tag/kleosr/PE2-CLI?style=flat-square&color=blue" />
+  <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" />
+  <img src="https://img.shields.io/badge/license-ISC-blue?style=flat-square" />
   <img src="https://img.shields.io/badge/built%20with-Cursor-6c47ff?style=flat-square" />
 </div>
 
