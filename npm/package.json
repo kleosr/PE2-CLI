@@ -1,7 +1,7 @@
 {
   "name": "@kleosr/pe2-cli",
-  "version": "4.0.2",
-  "description": "PE2-CLI: Convert raw prompts to PE2-optimized prompts — Rust native",
+  "version": "4.0.3",
+  "description": "Convert raw prompts to PE²-structured prompts — Rust native CLI",
   "keywords": [
     "pe2",
     "prompt-engineering",
