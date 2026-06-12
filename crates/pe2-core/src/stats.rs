@@ -1,126 +1,106 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio::sync::Mutex;
 use crate::config::stats_file_path;
 use crate::errors::CliError;
-use crate::write_atomic;
+use crate::json_store::JsonStore;
 use chrono;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct StatsData {
     pub total_prompts: u64,
     pub running_avg_complexity: f64,
     pub daily_usage: HashMap<String, u64>,
+    #[serde(default)]
+    pub provider_usage: HashMap<String, u64>,
     pub last_updated: String,
 }
 
 #[derive(Debug)]
 pub struct StatsTracker {
-    data: StatsData,
-    save_pending: bool,
-    pub daily_usage: Arc<Mutex<HashMap<String, u64>>>,
+    store: JsonStore<StatsData>,
 }
 
 impl StatsTracker {
     pub fn new() -> Self {
-        let data = Self::load();
-        let daily_usage = Arc::new(Mutex::new(data.daily_usage.clone()));
         Self {
-            data,
-            save_pending: false,
-            daily_usage,
-        }
-    }
-
-    fn load() -> StatsData {
-        let path = stats_file_path();
-        if path.exists() {
-            std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default()
-        } else {
-            StatsData::default()
+            store: JsonStore::load(stats_file_path()),
         }
     }
 
     pub fn record_usage(&mut self, provider: &str) {
-        self.data.total_prompts += 1;
+        let data = self.store.data_mut();
+        data.total_prompts += 1;
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        *self.data.daily_usage.entry(today.clone()).or_insert(0) += 1;
-        *self.data.last_updated = chrono::Utc::now().to_rfc3339();
-
-        // Also update the shared mutex
-        if let Ok(mut usage) = self.daily_usage.try_lock() {
-            *usage.entry(today).or_insert(0) += 1;
-        }
-
-        self.prune_daily_usage();
-        self.schedule_save();
+        *data.daily_usage.entry(today).or_insert(0) += 1;
+        *data.provider_usage.entry(provider.to_string()).or_insert(0) += 1;
+        data.last_updated = chrono::Utc::now().to_rfc3339();
+        prune_daily_usage(data);
+        self.store.persist_best_effort();
     }
 
     pub fn track(&mut self, model: &str, complexity_score: u32) {
-        self.data.total_prompts += 1;
-        let n = self.data.total_prompts as f64;
-        self.data.running_avg_complexity = if n > 1.0 {
-            ((n - 1.0) / n) * self.data.running_avg_complexity + (1.0 / n) * complexity_score as f64
+        let data = self.store.data_mut();
+        data.total_prompts += 1;
+        let n = data.total_prompts as f64;
+        data.running_avg_complexity = if n > 1.0 {
+            ((n - 1.0) / n) * data.running_avg_complexity + (1.0 / n) * complexity_score as f64
         } else {
             complexity_score as f64
         };
 
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        *self.data.daily_usage.entry(today.clone()).or_insert(0) += 1;
-        self.data.last_updated = chrono::Utc::now().to_rfc3339();
-
-        if let Ok(mut usage) = self.daily_usage.try_lock() {
-            *usage.entry(today).or_insert(0) += 1;
-        }
-
-        self.prune_daily_usage();
-        self.schedule_save();
-    }
-
-    fn prune_daily_usage(&mut self) {
-        if self.data.daily_usage.len() > 120 {
-            let mut keys: Vec<String> = self.data.daily_usage.keys().cloned().collect();
-            keys.sort();
-            let cutoff = keys.len().saturating_sub(90);
-            for key in keys.iter().take(cutoff) {
-                self.data.daily_usage.remove(key);
-            }
-        }
-    }
-
-    fn schedule_save(&mut self) {
-        if !self.save_pending {
-            self.save_pending = true;
-            let data = self.data.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                let path = stats_file_path();
-                write_atomic::write_json_atomic(&path, &data).ok();
-            });
-        }
+        *data.daily_usage.entry(today).or_insert(0) += 1;
+        *data.provider_usage.entry(model.to_string()).or_insert(0) += 1;
+        data.last_updated = chrono::Utc::now().to_rfc3339();
+        prune_daily_usage(data);
+        self.store.persist_best_effort();
     }
 
     pub async fn save(&self) -> Result<(), CliError> {
-        write_atomic::write_json_atomic(&stats_file_path(), &self.data)?;
-        Ok(())
-    }
-
-    pub fn force_save(&self) -> Result<(), CliError> {
-        write_atomic::write_json_atomic(&stats_file_path(), &self.data)?;
-        Ok(())
+        self.store.persist()
     }
 
     pub fn stats(&self) -> &StatsData {
-        &self.data
+        self.store.data()
+    }
+}
+
+fn prune_daily_usage(data: &mut StatsData) {
+    if data.daily_usage.len() > 120 {
+        let mut keys: Vec<String> = data.daily_usage.keys().cloned().collect();
+        keys.sort();
+        let cutoff = keys.len().saturating_sub(90);
+        for key in keys.iter().take(cutoff) {
+            data.daily_usage.remove(key);
+        }
     }
 }
 
 impl Default for StatsTracker {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn record_usage_tracks_provider_and_daily() {
+        let mut st = StatsTracker::default();
+        st.record_usage("openrouter");
+        assert_eq!(st.stats().total_prompts, 1);
+        assert_eq!(st.stats().provider_usage.get("openrouter"), Some(&1));
+        assert_eq!(st.stats().daily_usage.len(), 1);
+    }
+
+    #[test]
+    fn record_usage_accumulates_same_provider() {
+        let mut st = StatsTracker::default();
+        st.record_usage("openai");
+        st.record_usage("openai");
+        assert_eq!(st.stats().total_prompts, 2);
+        assert_eq!(st.stats().provider_usage.get("openai"), Some(&2));
     }
 }

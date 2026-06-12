@@ -1,13 +1,12 @@
 use anyhow::Context as AnyhowContext;
-use async_trait::async_trait;
 use clap::Parser;
 use colored::Colorize;
 use pe2_cli::args::Args;
 use pe2_core::config;
-use pe2_core::engine::EngineLlmProvider;
+use pe2_core::engine::{Pipeline, PipelineRunOptions};
 use pe2_core::errors::CliError;
-use pe2_core::messages::Message;
-use pe2_providers::client::{LlmClient, ProviderConfig, ProviderKind};
+use pe2_providers::adapter::LlmClientAdapter;
+use pe2_providers::client::{ProviderConfig, ProviderKind};
 use pe2_tui::banner::print_banner;
 use pe2_tui::display::{
     create_spinner, print_complexity_analysis, print_error, print_info, print_metrics,
@@ -95,27 +94,16 @@ async fn run_single_prompt(args: Args, raw_prompt: &str) -> anyhow::Result<()> {
     let spinner = create_spinner("Generating prompt...");
 
     let raw_client = pe2_providers::factory::create_client(&provider_config)?;
-
-    struct SingleClientAdapter {
-        inner: Box<dyn LlmClient>,
-    }
-
-    #[async_trait]
-    impl EngineLlmProvider for SingleClientAdapter {
-        async fn chat(
-            &self,
-            model: &str,
-            messages: &[Message],
-            max_tokens: u32,
-            temperature: f64,
-        ) -> Result<String, CliError> {
-            let resp = self.inner.chat(model, messages, max_tokens, temperature).await?;
-            Ok(resp.content)
-        }
-    }
-
-    let adapter = SingleClientAdapter { inner: raw_client };
-    let mut pipeline = pe2_core::engine::Pipeline::new(Box::new(adapter), cfg.clone());
+    let options = PipelineRunOptions {
+        iterations_override: args.iterations,
+        max_tokens: args.max_tokens,
+        temperature: args.temperature,
+    };
+    let mut pipeline = Pipeline::with_options(
+        Box::new(LlmClientAdapter::new(raw_client)),
+        cfg.clone(),
+        options,
+    );
     let result = pipeline.run(raw_prompt).await?;
 
     spinner.finish_and_clear();

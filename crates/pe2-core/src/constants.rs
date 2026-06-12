@@ -1,6 +1,5 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::collections::HashMap;
 
 /// Default model configuration
 pub const DEFAULT_MODEL: &str = "openai/gpt-4o-mini";
@@ -20,11 +19,8 @@ pub const REQUEST_TIMEOUT_MS: u64 = 30000;
 /// Prompt limits
 pub const PROMPT_MIN_LENGTH: usize = 10;
 pub const PROMPT_MAX_LENGTH: usize = 10000;
-pub const PROMPT_CACHE_KEY_PREFIX_LENGTH: usize = 100;
 pub const PROMPT_PREVIEW_MAX_LENGTH: usize = 200;
 pub const PROMPT_PROCESSING_DISPLAY_MAX_LENGTH: usize = 100;
-pub const API_KEY_DISPLAY_LENGTH: usize = 8;
-pub const API_KEY_MASK_LENGTH: usize = 8;
 pub const SHORT_API_KEY_THRESHOLD: usize = 12;
 pub const SHORT_API_KEY_PREFIX: usize = 4;
 pub const SHORT_API_KEY_SUFFIX: usize = 4;
@@ -43,10 +39,7 @@ pub const SPECIAL_CHARS_MEDIUM: usize = 2;
 
 /// Session configuration
 pub const MAX_HISTORY_ITEMS: usize = 50;
-pub const MAX_FAVORITE_MODELS: usize = 5;
 pub const MAX_LAST_USED_COMMANDS: usize = 10;
-pub const COMMAND_SUGGESTIONS_LIMIT: usize = 5;
-pub const PRIORITY_COMMANDS_LIMIT: usize = 5;
 
 /// File permissions (0o600)
 pub const CONFIG_FILE_MODE: u32 = 0o600;

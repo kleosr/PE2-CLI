@@ -136,15 +136,42 @@ impl Metrics {
 pub struct Pipeline {
     provider: Box<dyn EngineLlmProvider>,
     config: Config,
+    options: PipelineRunOptions,
     current_prompt: Option<StructuredPrompt>,
     history: Vec<RefinementEntry>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PipelineRunOptions {
+    pub iterations_override: Option<u32>,
+    pub max_tokens: u32,
+    pub temperature: f64,
+}
+
+impl Default for PipelineRunOptions {
+    fn default() -> Self {
+        Self {
+            iterations_override: None,
+            max_tokens: constants::LLM_MAX_TOKENS,
+            temperature: constants::LLM_TEMPERATURE,
+        }
+    }
+}
+
 impl Pipeline {
     pub fn new(provider: Box<dyn EngineLlmProvider>, config: Config) -> Self {
+        Self::with_options(provider, config, PipelineRunOptions::default())
+    }
+
+    pub fn with_options(
+        provider: Box<dyn EngineLlmProvider>,
+        config: Config,
+        options: PipelineRunOptions,
+    ) -> Self {
         Self {
             provider,
             config,
+            options,
             current_prompt: None,
             history: Vec::new(),
         }
@@ -152,7 +179,11 @@ impl Pipeline {
 
     pub async fn run(&mut self, raw_prompt: &str) -> Result<PipelineResult, CliError> {
         let analysis = analysis::analyze_prompt_complexity(raw_prompt);
-        let iterations = analysis.iterations as usize;
+        let iterations = self
+            .options
+            .iterations_override
+            .unwrap_or(analysis.iterations)
+            .max(1) as usize;
 
         let initial = self.generate_initial(raw_prompt).await?;
         self.current_prompt = Some(initial.prompt.clone());
@@ -222,8 +253,8 @@ impl Pipeline {
             .chat(
                 &self.config.model,
                 &messages,
-                constants::LLM_MAX_TOKENS,
-                constants::LLM_TEMPERATURE,
+                self.options.max_tokens,
+                self.options.temperature,
             )
             .await?;
 
@@ -249,8 +280,8 @@ impl Pipeline {
             .chat(
                 &self.config.model,
                 &messages,
-                constants::LLM_MAX_TOKENS,
-                constants::LLM_TEMPERATURE,
+                self.options.max_tokens,
+                self.options.temperature,
             )
             .await?;
 
@@ -279,10 +310,4 @@ pub struct PipelineResult {
     pub metrics: Metrics,
     pub analysis: ComplexityResult,
     pub history: Vec<RefinementEntry>,
-}
-
-pub fn create_session_output_file(session_id: &str) -> String {
-    paths::resolve_output_file(None, session_id)
-        .to_string_lossy()
-        .to_string()
 }

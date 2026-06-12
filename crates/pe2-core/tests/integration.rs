@@ -362,6 +362,100 @@ async fn test_engine_generate_initial_success() {
     assert!(pipeline_result.output_file.contains("pe2-session-"));
 }
 
+const VALID_PROMPT_JSON: &str = r#"{
+        "context": "Test context",
+        "role": "Test role",
+        "task": "1. Do this\n2. Do that",
+        "constraints": "- Be good",
+        "output": "JSON output"
+    }"#;
+
+#[tokio::test]
+async fn test_pipeline_iterations_override_limits_refinements() {
+    use pe2_core::engine::{Pipeline, PipelineRunOptions};
+
+    let provider = MockProvider {
+        response: VALID_PROMPT_JSON.to_string(),
+        should_fail: false,
+    };
+    let cfg = pe2_core::config::Config::default();
+    let options = PipelineRunOptions {
+        iterations_override: Some(1),
+        ..Default::default()
+    };
+    let mut pipeline = Pipeline::with_options(Box::new(provider), cfg, options);
+
+    let result = pipeline.run("Write a test").await.unwrap();
+    assert_eq!(
+        result.history.len(),
+        1,
+        "one iteration should produce only the initial pass"
+    );
+}
+
+#[tokio::test]
+async fn test_pipeline_iterations_override_zero_runs_at_least_one_pass() {
+    use pe2_core::engine::{Pipeline, PipelineRunOptions};
+
+    let provider = MockProvider {
+        response: VALID_PROMPT_JSON.to_string(),
+        should_fail: false,
+    };
+    let cfg = pe2_core::config::Config::default();
+    let options = PipelineRunOptions {
+        iterations_override: Some(0),
+        ..Default::default()
+    };
+    let mut pipeline = Pipeline::with_options(Box::new(provider), cfg, options);
+
+    let result = pipeline.run("Write a test").await.unwrap();
+    assert_eq!(result.history.len(), 1);
+}
+
+#[tokio::test]
+async fn test_pipeline_passes_custom_llm_params_to_provider() {
+    use pe2_core::engine::{Pipeline, PipelineRunOptions};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct CapturingProvider {
+        response: String,
+        captured: Arc<Mutex<Option<(u32, f64)>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl pe2_core::engine::EngineLlmProvider for CapturingProvider {
+        async fn chat(
+            &self,
+            _model: &str,
+            _messages: &[pe2_core::messages::Message],
+            max_tokens: u32,
+            temperature: f64,
+        ) -> Result<String, pe2_core::errors::CliError> {
+            *self.captured.lock().unwrap() = Some((max_tokens, temperature));
+            Ok(self.response.clone())
+        }
+    }
+
+    let captured = Arc::new(Mutex::new(None));
+    let provider = CapturingProvider {
+        response: VALID_PROMPT_JSON.to_string(),
+        captured: captured.clone(),
+    };
+    let cfg = pe2_core::config::Config::default();
+    let options = PipelineRunOptions {
+        iterations_override: Some(1),
+        max_tokens: 512,
+        temperature: 0.9,
+    };
+    let mut pipeline = Pipeline::with_options(Box::new(provider), cfg, options);
+    pipeline.run("Write a test").await.unwrap();
+
+    let (max_tokens, temperature) = captured.lock().unwrap().expect("provider should be called");
+    assert_eq!(max_tokens, 512);
+    assert!((temperature - 0.9).abs() < f64::EPSILON);
+}
+
 // ============================================================
 // StructuredPrompt tests
 // ============================================================

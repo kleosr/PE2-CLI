@@ -3,6 +3,7 @@ use pe2_core::constants;
 use pe2_core::errors::CliError;
 use pe2_core::messages::Message;
 use crate::client::{LlmClient, ProviderConfig, ProviderResponse};
+use crate::http::parse_json_response;
 
 pub struct OllamaClient {
     client: reqwest::Client,
@@ -29,14 +30,20 @@ impl LlmClient for OllamaClient {
         &self,
         model: &str,
         messages: &[Message],
-        _max_tokens: u32,
-        _temperature: f64,
+        max_tokens: u32,
+        temperature: f64,
     ) -> Result<ProviderResponse, CliError> {
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "model": model,
             "messages": messages,
             "stream": false,
         });
+        if max_tokens > 0 {
+            body["options"] = serde_json::json!({
+                "num_predict": max_tokens,
+                "temperature": temperature,
+            });
+        }
 
         let response = self.client
             .post(format!("{}/api/chat", self.base_url))
@@ -46,11 +53,7 @@ impl LlmClient for OllamaClient {
             .await
             .map_err(|e| CliError::Network(e.to_string()))?;
 
-        let status = response.status();
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| CliError::Json(e))?;
+        let (status, json) = parse_json_response(response, "ollama").await?;
 
         if !status.is_success() {
             return Err(CliError::Provider {

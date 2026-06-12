@@ -3,6 +3,7 @@ use tokio::sync::Mutex;
 use crate::constants;
 use crate::config::{ensure_config_dir, sessions_dir_path};
 use crate::errors::CliError;
+use crate::write_atomic;
 use uuid::Uuid;
 use std::sync::Arc;
 
@@ -57,25 +58,6 @@ impl SessionManager {
         self.current.prompts.len()
     }
 
-    pub async fn save_session(&self, output_file: &str, prompt: &str, result: &str) -> Result<(), CliError> {
-        ensure_config_dir()?;
-        let sessions_dir = sessions_dir_path();
-        if !sessions_dir.exists() {
-            std::fs::create_dir_all(&sessions_dir)?;
-        }
-        let session_file = sessions_dir.join(format!("session-{}.json", self.session_id));
-        let entry = serde_json::json!({
-            "session_id": self.session_id,
-            "timestamp": chrono::Utc::now().to_rfc3339(),
-            "input_prompt": prompt,
-            "output_file": output_file,
-            "result_snippet": result.chars().take(500).collect::<String>(),
-        });
-        let content = serde_json::to_string_pretty(&entry)?;
-        std::fs::write(&session_file, content)?;
-        Ok(())
-    }
-
     pub async fn save(&self) -> Result<(), CliError> {
         ensure_config_dir()?;
         let sessions_dir = sessions_dir_path();
@@ -87,8 +69,7 @@ impl SessionManager {
             return Ok(());
         }
         let session_file = sessions_dir.join(format!("session-{}.json", self.session_id));
-        let content = serde_json::to_string_pretty(&*entries)?;
-        std::fs::write(&session_file, content)?;
+        write_atomic::write_json_atomic(&session_file, &*entries)?;
         Ok(())
     }
 
@@ -98,30 +79,6 @@ impl SessionManager {
         if entries.len() > constants::MAX_HISTORY_ITEMS {
             entries.remove(0);
         }
-    }
-
-    pub async fn load_history(limit: Option<usize>) -> Vec<String> {
-        let limit = limit.unwrap_or(50);
-        let sessions_dir = sessions_dir_path();
-        if !sessions_dir.exists() {
-            return Vec::new();
-        }
-        let mut entries = Vec::new();
-        let mut read_dir = match std::fs::read_dir(&sessions_dir) {
-            Ok(d) => d,
-            Err(_) => return Vec::new(),
-        };
-        while let Ok(Some(entry)) = read_dir.next() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("json") {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    entries.push(content);
-                }
-            }
-        }
-        entries.sort();
-        entries.truncate(limit);
-        entries
     }
 }
 
