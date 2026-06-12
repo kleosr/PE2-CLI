@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use colored::Colorize;
 use crossterm::{
     cursor,
@@ -6,14 +5,15 @@ use crossterm::{
     terminal::{self, Clear, ClearType},
 };
 use pe2_core::config::{self, Config};
-use pe2_core::engine::{self, EngineLlmProvider, Pipeline};
+use pe2_core::engine::Pipeline;
 use pe2_core::errors::CliError;
-use pe2_core::messages::Message;
 use pe2_core::preferences::UserPreferences;
 use pe2_core::session::SessionManager;
 use pe2_core::stats::StatsTracker;
+use pe2_core::util;
 use pe2_core::validation;
-use pe2_providers::client::{LlmClient, ProviderConfig, ProviderKind};
+use pe2_providers::adapter::LlmClientAdapter;
+use pe2_providers::client::{ProviderConfig, ProviderKind};
 use pe2_providers::factory::create_client;
 use std::io::{self, Write};
 use crate::banner::{print_banner, print_banner_brief};
@@ -21,24 +21,6 @@ use crate::display::{
     create_spinner, print_complexity_analysis, print_error, print_info, print_metrics,
     print_prompt_result, print_refinement_history, print_separator, print_success, print_warning,
 };
-
-struct ClientAdapter {
-    inner: Box<dyn LlmClient>,
-}
-
-#[async_trait]
-impl EngineLlmProvider for ClientAdapter {
-    async fn chat(
-        &self,
-        model: &str,
-        messages: &[Message],
-        max_tokens: u32,
-        temperature: f64,
-    ) -> Result<String, CliError> {
-        let resp = self.inner.chat(model, messages, max_tokens, temperature).await?;
-        Ok(resp.content)
-    }
-}
 
 const HELP_TEXT: &str = r#"
   Available Commands:
@@ -161,8 +143,10 @@ impl InteractiveSession {
         let spinner = create_spinner("Generating prompt...");
 
         let raw_client = create_client(&provider_config)?;
-        let adapter = ClientAdapter { inner: raw_client };
-        let mut pipeline = Pipeline::new(Box::new(adapter), self.config.clone());
+        let mut pipeline = Pipeline::new(
+            Box::new(LlmClientAdapter::new(raw_client)),
+            self.config.clone(),
+        );
 
         let result = pipeline.run(raw_prompt).await?;
 
@@ -182,10 +166,12 @@ impl InteractiveSession {
             score: result.analysis.score,
             timestamp: chrono::Utc::now().to_rfc3339(),
         }).await;
-        self.session.save().await;
+        self.session.save().await?;
 
-        self.stats.record_usage(&self.config.provider);
-        self.stats.save().await;
+        if self.preferences.track_usage() {
+            self.stats.record_usage(&self.config.provider);
+            self.stats.save().await?;
+        }
 
         Ok(())
     }
@@ -215,16 +201,7 @@ impl InteractiveSession {
             self.config.model = model.to_string();
         }
 
-        let masked = self.config.api_key.as_deref()
-            .map(|k| {
-                let len = k.len();
-                if len > 12 {
-                    format!("{}...{}", &k[..4], &k[len-4..])
-                } else {
-                    "****".to_string()
-                }
-            })
-            .unwrap_or_else(|| "not set".to_string());
+        let masked = util::mask_api_key(self.config.api_key.as_deref());
         print!("  {} [{}]: ", "API Key".bright_white(), masked.dimmed());
         io::stdout().flush()?;
         let mut key = String::new();
@@ -273,18 +250,53 @@ impl InteractiveSession {
     }
 
     async fn handle_stats(&self) {
-        let daily_stats = self.stats.daily_usage.lock().await;
-        if daily_stats.is_empty() {
+        let stats = self.stats.stats();
+        if stats.total_prompts == 0 {
             println!("  {}", "No usage statistics yet.".dimmed());
             return;
         }
         println!();
-        println!("  {} {}", "◆".bright_green(), "Usage Statistics".bright_white().bold());
+        println!(
+            "  {} {}",
+            "◆".bright_green(),
+            "Usage Statistics".bright_white().bold()
+        );
         println!();
-        let mut sorted: Vec<_> = daily_stats.iter().collect();
-        sorted.sort_by(|a, b| b.1.cmp(a.1));
-        for (provider, count) in sorted.iter().take(10) {
-            println!("  {} {} {} {}", " ".dimmed(), provider.bright_cyan(), "·".dimmed(), count.to_string().bright_white());
+        println!(
+            "  {} {} {}",
+            "  Total prompts:".dimmed(),
+            "·".dimmed(),
+            stats.total_prompts.to_string().bright_white()
+        );
+        if !stats.provider_usage.is_empty() {
+            println!();
+            println!("  {}", "  By provider:".dimmed());
+            let mut providers: Vec<_> = stats.provider_usage.iter().collect();
+            providers.sort_by(|a, b| b.1.cmp(a.1));
+            for (provider, count) in providers.iter().take(10) {
+                println!(
+                    "  {} {} {} {}",
+                    " ".dimmed(),
+                    provider.bright_cyan(),
+                    "·".dimmed(),
+                    count.to_string().bright_white()
+                );
+            }
+        }
+        if !stats.daily_usage.is_empty() {
+            println!();
+            println!("  {}", "  By date:".dimmed());
+            let mut dates: Vec<_> = stats.daily_usage.iter().collect();
+            dates.sort_by(|a, b| b.0.cmp(a.0));
+            for (date, count) in dates.iter().take(10) {
+                println!(
+                    "  {} {} {} {}",
+                    " ".dimmed(),
+                    date.bright_white(),
+                    "·".dimmed(),
+                    count.to_string().bright_white()
+                );
+            }
         }
         println!();
     }

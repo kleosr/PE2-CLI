@@ -3,6 +3,7 @@ use pe2_core::constants;
 use pe2_core::errors::CliError;
 use pe2_core::messages::Message;
 use crate::client::{LlmClient, ProviderConfig, ProviderResponse};
+use crate::http::parse_json_response;
 
 pub struct GoogleClient {
     client: reqwest::Client,
@@ -34,7 +35,7 @@ impl LlmClient for GoogleClient {
         &self,
         model: &str,
         messages: &[Message],
-        _max_tokens: u32,
+        max_tokens: u32,
         temperature: f64,
     ) -> Result<ProviderResponse, CliError> {
         let prompt_text = flatten_messages(messages);
@@ -47,7 +48,7 @@ impl LlmClient for GoogleClient {
             }],
             "generationConfig": {
                 "temperature": temperature,
-                "maxOutputTokens": 8192
+                "maxOutputTokens": max_tokens
             }
         });
 
@@ -65,11 +66,7 @@ impl LlmClient for GoogleClient {
             .await
             .map_err(|e| CliError::Network(e.to_string()))?;
 
-        let status = response.status();
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| CliError::Json(e))?;
+        let (status, json) = parse_json_response(response, "google").await?;
 
         if !status.is_success() {
             let err_msg = json["error"]["message"].as_str().unwrap_or("Unknown error");

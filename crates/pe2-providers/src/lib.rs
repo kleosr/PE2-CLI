@@ -1,5 +1,7 @@
+pub mod adapter;
 pub mod client;
 pub mod factory;
+pub mod http;
 pub mod openai;
 pub mod anthropic;
 pub mod google;

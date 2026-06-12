@@ -11,62 +11,64 @@
 <div align="center">
   <h1>PE²-CLI</h1>
   <p><strong>Structured Prompt Generation — Rust Native</strong></p>
-  <p>Give it a rough idea. Get back a production-ready PE²-structured prompt.<br />Zero GC. True async. Sub-millisecond startup.</p>
+  <p>Drop in a rough prompt. Get back a PE²-structured prompt you can ship.<br />Single binary, no GC, fast startup, async all the way through.</p>
 </div>
 
 <br />
 
 ---
 
-## 📦 Install
+## Install
 
 ```bash
-# Via npm (meta-package, no postinstall scripts)
+# npm meta-package (no postinstall scripts)
 npm install -g @kleosr/pe2-cli
 
-# From source (requires Rust 1.81+)
+# from source (Rust 1.81+)
 cargo install --git https://github.com/kleosr/PE2-CLI
 
-# Or grab a binary from the releases page
+# or grab a release binary
 # https://github.com/kleosr/PE2-CLI/releases
 ```
 
-## 🚀 Usage
+## Usage
 
 ```bash
-# Interactive mode — just run it
+# interactive REPL
 pe2
 
-# One-shot
+# one-shot
 pe2 "Write a blog post about AI"
 
-# From a file
+# from a file
 pe2 path/to/prompt.txt
 
-# With overrides
-pe2 "Explain quantum computing" --provider openai --model gpt-4o --iterations 5
+# override provider, model, and refinement
+pe2 "Explain quantum computing" --provider openai --model gpt-4o -i 5 --max-tokens 512 --temperature 0.5
 
-# Config menu
+# same REPL as no-args mode
 pe2 --config
 ```
 
-No arguments = interactive mode. First run will prompt you to set up your provider and API key.
+No arguments opens the interactive REPL. First run walks you through provider and API key setup.
 
-## ⚙️ Configuration
+Single-shot flags for `--iterations`, `--max-tokens`, and `--temperature` apply directly to the pipeline. Omit them and complexity analysis picks the refinement count.
 
-Settings live in `~/.kleosr-pe2/config.json`. Change them through the interactive menu (`/config`) or edit the file directly.
+## Configuration
+
+Config lives at `~/.kleosr-pe2/config.json`. Edit it by hand or use `/config` in the REPL.
 
 | Flag | What it does |
 |------|-------------|
-| `-p, --provider` | LLM provider: `openai`, `anthropic`, `google`, `openrouter`, `ollama` |
-| `-m, --model` | Model identifier (check your provider's docs) |
-| `--api-key` | Your API key (or set the env var below) |
-| `-o, --output-file` | Where to save the result |
-| `-i, --iterations` | Refinement pass count (auto-detected by default) |
+| `-p, --provider` | `openai`, `anthropic`, `google`, `openrouter`, `ollama` |
+| `-m, --model` | Model ID for the provider |
+| `--api-key` | API key (or use the env var below) |
+| `-o, --output-file` | Output path |
+| `-i, --iterations` | Refinement passes (overrides auto-detection) |
 | `--max-tokens` | Max response tokens (default: 1024) |
 | `--temperature` | Sampling temperature (default: 0.3) |
 
-### Environment Variables
+### Environment variables
 
 | Provider | Variable |
 |----------|----------|
@@ -76,12 +78,12 @@ Settings live in `~/.kleosr-pe2/config.json`. Change them through the interactiv
 | OpenRouter | `OPENROUTER_API_KEY` |
 | Ollama (local) | `OLLAMA_BASE_URL` |
 
-## 🔄 How It Works
+## How it works
 
-1. **Complexity analysis** — scores your prompt on 5 factors (tech, domain, structure, logic, special chars), maps to difficulty tiers
-2. **LLM call** — sends it with a structured JSON template
-3. **Refinement loop** — auto-detects complexity; simple prompts get 1 pass, technical deep-dives get up to 5
-4. **Output** — writes to `./pe2-prompts/` as markdown with full history and metrics
+1. **Complexity analysis** scores the prompt on tech terms, domain, structure, logic, and special characters, then maps to a difficulty tier.
+2. **Initial LLM call** uses a structured JSON template.
+3. **Refinement loop** runs 1–5 passes depending on complexity (or your `-i` override).
+4. **Output** lands in `./pe2-prompts/` as markdown with history and metrics.
 
 ```json
 {
@@ -93,22 +95,22 @@ Settings live in `~/.kleosr-pe2/config.json`. Change them through the interactiv
 }
 ```
 
-Every prompt is returned as a structured PE² JSON document.
-
-## 🏗️ Architecture
+## Architecture
 
 ```
 crates/
-├── pe2-core/       — config, analysis, engine/pipeline, templates
-├── pe2-providers/  — 5 adapters: OpenAI, Anthropic, Google, Ollama, OpenRouter
-├── pe2-tui/        — banner, spinner, themed display, interactive REPL (crossterm)
-├── pe2-cli/        — binary entry: clap args, single-prompt + interactive modes
-└── pe2-bindings/   — napi-rs bridge (optional, Node.js native addon)
+├── pe2-core/       — config, analysis, engine/pipeline, templates, persistence
+├── pe2-providers/  — OpenAI, Anthropic, Google, Ollama, OpenRouter adapters
+├── pe2-tui/        — banner, spinner, themed output, interactive REPL
+├── pe2-cli/        — clap entry, single-shot and interactive dispatch
+└── pe2-bindings/   — napi-rs bridge (optional Node.js addon)
 ```
 
-Clean dependency chain — no circular deps. ~3,200 lines of Rust across 36 source files.
+No circular deps. About 3,200 lines of Rust across 36 source files.
 
-## 🛠️ Development
+Shared `JsonStore` handles stats and preferences persistence. Provider HTTP errors surface the status code and a body snippet when the response is not JSON.
+
+## Development
 
 ```bash
 git clone https://github.com/kleosr/PE2-CLI.git
@@ -118,26 +120,24 @@ cargo test
 cargo run -- --help
 ```
 
-Tests live in `crates/*/tests/`. Run with `cargo test`.
+Integration tests sit under `crates/*/tests/`.
 
-## 🤖 CI/CD
+## CI/CD
 
-Push a `v*` tag and GitHub Actions:
-1. Runs `cargo test`
-2. Matrix builds across 6 platforms (linux x64/arm64, darwin x64/arm64, windows x64/arm64)
-3. Uploads release tarballs
+Tag a release with `v*` and GitHub Actions will:
 
-## 🦀 Why Rust?
+1. Run `cargo test`
+2. Build for linux/darwin/windows (x64 and arm64)
+3. Upload release tarballs
 
-I wrote the first version in Node.js. It worked, but:
-- **~300ms startup** waiting for the runtime to warm up
-- **GC pauses** during prompt refinement
-- **Callbacks and promises** for concurrency
+## Why Rust?
 
-Rust fixed all of it. Single static binary, ~2ms startup, zero GC, and tokio async everywhere. Five concurrent provider calls? No problem.
+The first version was Node.js. It worked, but startup sat around 300ms, GC paused during refinement, and concurrency meant callbacks and promises everywhere.
+
+Rust gave a static binary, roughly 2ms startup, no GC, and tokio async. Five provider calls in parallel is routine.
 
 Built with [Cursor](https://cursor.com).
 
-## 📄 License
+## License
 
 ISC
