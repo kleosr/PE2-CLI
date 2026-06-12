@@ -1,36 +1,43 @@
 # pe2-providers — LLM Adapters
 
-**9 modules, ~560 LOC, 5 adapters**
+**Parent:** `AGENTS.md`
+**Scope:** `crates/pe2-providers/`
 
-Runtime-switchable provider implementations using a trait-based adapter pattern.
+**9 modules, ~560 LOC, 5 adapters** — runtime-switchable provider implementations.
 
-## Structure
+## Where To Look
 
-```
-src/
-├── client.rs       (114L) — Provider trait definition + HTTP client setup
-├── factory.rs      (16L)  — Runtime selection from config string
-├── openai.rs       (74L)  — OpenAI adapter
-├── anthropic.rs    (91L)  — Anthropic/Claude adapter
-├── google.rs       (85L)  — Google Gemini adapter
-├── ollama.rs       (68L)  — Local Ollama adapter
-├── openrouter.rs   (70L)  — OpenRouter adapter
-├── headers.rs      (34L)  — Request header helpers
-└── lib.rs          (8L)   — Crate root, re-exports
-```
+| Module | File | Role |
+|--------|------|------|
+| Trait | `src/client.rs` (114L) | `LlmClient` trait + `ProviderConfig`, `ProviderKind` |
+| Factory | `src/factory.rs` (16L) | `ProviderKind` → boxed adapter |
+| OpenAI | `src/openai.rs` (74L) | OpenAI adapter |
+| Anthropic | `src/anthropic.rs` (91L) | Claude adapter |
+| Google | `src/google.rs` (85L) | Gemini adapter |
+| Ollama | `src/ollama.rs` (68L) | Local Ollama adapter |
+| OpenRouter | `src/openrouter.rs` (70L) | OpenRouter adapter |
+| Headers | `src/headers.rs` (34L) | Bearer/OpenRouter header builders |
+| Integration tests | `tests/integration.rs` (187L) | Shared test for all adapters |
 
 ## Provider Trait
 
-Defined in `client.rs`. Each adapter implements the same async trait with `send_prompt()` method. Factory in `factory.rs` maps provider string → boxed adapter.
+`LlmClient::chat()` in `client.rs`. Factory maps `ProviderKind` → `OpenAIClient` / `AnthropicClient` / etc.
 
-## Conventions
+## Conventions (delta)
 
-- All adapters normalize response to `ProviderResponse` struct
-- API keys from env vars (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
-- reqwest with rustls-tls for HTTPS
+- All adapters return `ProviderResponse` struct
+- API keys from env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.)
+- Each adapter: `reqwest` POST → status check → provider-specific JSON field extraction
 
 ## Anti-Patterns
 
-- **Thin trait = duplication** — most logic (HTTP call, JSON parsing, error mapping) repeated across all 5 adapters
-- **No unit tests per adapter** — only one integration test file for all
-- **Ollama adapter mixes HTTP + local process concerns**
+- **Duplicated HTTP flow** — same send/parse/error pattern in all 5 adapters
+- **Misleading errors** — `json().await` failure mapped to `CliError::Json` (not network)
+- **No per-adapter unit tests** — one integration file only
+- **Ollama mixes HTTP + local process concerns**
+
+## Tests
+
+```bash
+cargo test -p pe2-providers
+```

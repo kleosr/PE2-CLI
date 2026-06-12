@@ -3,6 +3,7 @@ use pe2_core::constants;
 use pe2_core::errors::CliError;
 use pe2_core::messages::Message;
 use crate::client::{LlmClient, ProviderConfig, ProviderResponse};
+use crate::http::parse_json_response;
 
 pub struct AnthropicClient {
     client: reqwest::Client,
@@ -69,11 +70,7 @@ impl LlmClient for AnthropicClient {
             .await
             .map_err(|e| CliError::Network(e.to_string()))?;
 
-        let status = response.status();
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| CliError::Json(e))?;
+        let (status, json) = parse_json_response(response, "anthropic").await?;
 
         if !status.is_success() {
             let err_msg = json["error"]["message"].as_str().unwrap_or("Unknown error");
