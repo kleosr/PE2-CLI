@@ -18,6 +18,10 @@
     "type": "git",
     "url": "git+https://github.com/kleosr/PE2-CLI.git"
   },
+  "homepage": "https://github.com/kleosr/PE2-CLI#readme",
+  "bugs": {
+    "url": "https://github.com/kleosr/PE2-CLI/issues"
+  },
   "publishConfig": {
     "access": "public"
   },

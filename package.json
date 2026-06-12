@@ -1,7 +1,7 @@
 {
   "name": "@kleosr/pe2-cli",
-  "version": "4.0.2",
-  "description": "PE2-CLI: Convert raw prompts to PE2-optimized prompts — Rust native binary",
+  "version": "4.0.3",
+  "description": "Convert raw prompts to PE²-structured prompts — Rust native CLI",
   "files": [
     "README.md"
   ],
@@ -20,6 +20,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kleosr/PE2-CLI.git"
+  },
+  "homepage": "https://github.com/kleosr/PE2-CLI#readme",
+  "bugs": {
+    "url": "https://github.com/kleosr/PE2-CLI/issues"
   },
   "publishConfig": {
     "access": "public"

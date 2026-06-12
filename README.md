@@ -50,9 +50,9 @@ pe2 "Explain quantum computing" --provider openai --model gpt-4o -i 5 --max-toke
 pe2 --config
 ```
 
-No arguments opens the interactive REPL. First run walks you through provider and API key setup.
+No arguments opens the interactive REPL. Set provider and API key with `/config` in the REPL, or edit `~/.kleosr-pe2/config.json` directly.
 
-Single-shot flags for `--iterations`, `--max-tokens`, and `--temperature` apply directly to the pipeline. Omit them and complexity analysis picks the refinement count.
+Single-shot `-i`, `--max-tokens`, and `--temperature` flags apply directly to the pipeline. Omit them and complexity analysis picks the refinement count.
 
 ## Configuration
 
@@ -107,8 +107,6 @@ crates/
 ```
 
 No circular deps. About 3,200 lines of Rust across 36 source files.
-
-Shared `JsonStore` handles stats and preferences persistence. Provider HTTP errors surface the status code and a body snippet when the response is not JSON.
 
 ## Development
 
