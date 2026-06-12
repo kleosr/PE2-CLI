@@ -2,10 +2,9 @@
 extern crate napi_derive;
 
 use napi::bindgen_prelude::*;
-use pe2_core::analysis::{self, ComplexityResult, Difficulty};
+use pe2_core::analysis;
 use pe2_core::config;
-use pe2_core::engine::{Pipeline, StructuredPrompt};
-use pe2_core::errors::CliError;
+use pe2_core::engine::Pipeline;
 
 // ============================================================
 // Config bindings
@@ -73,28 +72,6 @@ pub async fn process_prompt(
     let client = pe2_providers::factory::create_client(&provider_config)
         .map_err(|e| Error::from_reason(e.to_string()))?;
 
-    use async_trait::async_trait;
-    use pe2_core::engine::EngineLlmProvider;
-    use pe2_core::messages::Message;
-
-    struct NapiClientAdapter {
-        inner: Box<dyn pe2_providers::client::LlmClient>,
-    }
-
-    #[async_trait]
-    impl EngineLlmProvider for NapiClientAdapter {
-        async fn chat(
-            &self,
-            model: &str,
-            messages: &[Message],
-            max_tokens: u32,
-            temperature: f64,
-        ) -> std::result::Result<String, CliError> {
-            let resp = self.inner.chat(model, messages, max_tokens, temperature).await?;
-            Ok(resp.content)
-        }
-    }
-
     let cfg = config::Config {
         provider,
         model,
@@ -102,7 +79,10 @@ pub async fn process_prompt(
         output_file: None,
     };
 
-    let mut pipeline = Pipeline::new(Box::new(NapiClientAdapter { inner: client }), cfg);
+    let mut pipeline = Pipeline::new(
+        Box::new(pe2_providers::adapter::LlmClientAdapter::new(client)),
+        cfg,
+    );
     let result = pipeline.run(&raw_prompt)
         .await
         .map_err(|e| Error::from_reason(e.to_string()))?;
