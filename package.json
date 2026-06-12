@@ -1,6 +1,7 @@
 {
   "name": "@kleosr/pe2-cli",
   "version": "4.0.3",
+  "private": true,
   "description": "Convert raw prompts to PE²-structured prompts — Rust native CLI",
   "files": [
     "README.md"
