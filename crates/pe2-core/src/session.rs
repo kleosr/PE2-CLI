@@ -19,21 +19,21 @@ pub struct SessionEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct SessionData {
-    pub prompts: Vec<String>,
+struct PromptHistory {
+    prompts: Vec<String>,
 }
 
 #[derive(Debug)]
-pub struct SessionManager {
-    current: SessionData,
+pub struct SessionStore {
+    history: PromptHistory,
     session_id: String,
     pub entries: Arc<Mutex<Vec<SessionEntry>>>,
 }
 
-impl SessionManager {
+impl SessionStore {
     pub fn new() -> Self {
         Self {
-            current: SessionData::default(),
+            history: PromptHistory::default(),
             session_id: Uuid::new_v4().to_string(),
             entries: Arc::new(Mutex::new(Vec::new())),
         }
@@ -44,18 +44,18 @@ impl SessionManager {
     }
 
     pub fn add_prompt(&mut self, prompt: String) {
-        self.current.prompts.push(prompt);
-        if self.current.prompts.len() > constants::MAX_HISTORY_ITEMS {
-            self.current.prompts.remove(0);
+        self.history.prompts.push(prompt);
+        if self.history.prompts.len() > constants::MAX_HISTORY_ITEMS {
+            self.history.prompts.remove(0);
         }
     }
 
     pub fn prompts(&self) -> &[String] {
-        &self.current.prompts
+        &self.history.prompts
     }
 
     pub fn prompt_count(&self) -> usize {
-        self.current.prompts.len()
+        self.history.prompts.len()
     }
 
     pub async fn save(&self) -> Result<(), CliError> {
@@ -82,7 +82,7 @@ impl SessionManager {
     }
 }
 
-impl Default for SessionManager {
+impl Default for SessionStore {
     fn default() -> Self {
         Self::new()
     }

@@ -64,15 +64,22 @@ pub fn ensure_config_dir() -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn load_config() -> Config {
+pub fn load_config() -> Result<Config, CliError> {
     let path = config_file_path();
-    if path.exists() {
-        match std::fs::read_to_string(&path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-            Err(_) => Config::default(),
+    if !path.exists() {
+        return Ok(Config::default());
+    }
+    let content = std::fs::read_to_string(&path).map_err(CliError::Io)?;
+    serde_json::from_str(&content).map_err(CliError::Json)
+}
+
+pub fn load_config_or_default() -> Config {
+    match load_config() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            tracing::warn!("failed to load config: {e}; using defaults");
+            Config::default()
         }
-    } else {
-        Config::default()
     }
 }
 

@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use crate::config::stats_file_path;
 use crate::errors::CliError;
 use crate::json_store::JsonStore;
 use chrono;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct StatsData {
+pub struct UsageStats {
     pub total_prompts: u64,
     pub running_avg_complexity: f64,
     pub daily_usage: HashMap<String, u64>,
@@ -17,42 +18,46 @@ pub struct StatsData {
 
 #[derive(Debug)]
 pub struct StatsTracker {
-    store: JsonStore<StatsData>,
+    store: JsonStore<UsageStats>,
 }
 
 impl StatsTracker {
     pub fn new() -> Self {
+        Self::from_path(stats_file_path())
+    }
+
+    pub fn from_path(path: PathBuf) -> Self {
         Self {
-            store: JsonStore::load(stats_file_path()),
+            store: JsonStore::load_or_default(path),
         }
     }
 
     pub fn record_usage(&mut self, provider: &str) {
-        let data = self.store.data_mut();
-        data.total_prompts += 1;
+        let stats = self.store.snapshot_mut();
+        stats.total_prompts += 1;
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        *data.daily_usage.entry(today).or_insert(0) += 1;
-        *data.provider_usage.entry(provider.to_string()).or_insert(0) += 1;
-        data.last_updated = chrono::Utc::now().to_rfc3339();
-        prune_daily_usage(data);
+        *stats.daily_usage.entry(today).or_insert(0) += 1;
+        *stats.provider_usage.entry(provider.to_string()).or_insert(0) += 1;
+        stats.last_updated = chrono::Utc::now().to_rfc3339();
+        prune_daily_usage(stats);
         self.store.persist_best_effort();
     }
 
     pub fn track(&mut self, model: &str, complexity_score: u32) {
-        let data = self.store.data_mut();
-        data.total_prompts += 1;
-        let n = data.total_prompts as f64;
-        data.running_avg_complexity = if n > 1.0 {
-            ((n - 1.0) / n) * data.running_avg_complexity + (1.0 / n) * complexity_score as f64
+        let stats = self.store.snapshot_mut();
+        stats.total_prompts += 1;
+        let n = stats.total_prompts as f64;
+        stats.running_avg_complexity = if n > 1.0 {
+            ((n - 1.0) / n) * stats.running_avg_complexity + (1.0 / n) * complexity_score as f64
         } else {
             complexity_score as f64
         };
 
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        *data.daily_usage.entry(today).or_insert(0) += 1;
-        *data.provider_usage.entry(model.to_string()).or_insert(0) += 1;
-        data.last_updated = chrono::Utc::now().to_rfc3339();
-        prune_daily_usage(data);
+        *stats.daily_usage.entry(today).or_insert(0) += 1;
+        *stats.provider_usage.entry(model.to_string()).or_insert(0) += 1;
+        stats.last_updated = chrono::Utc::now().to_rfc3339();
+        prune_daily_usage(stats);
         self.store.persist_best_effort();
     }
 
@@ -60,18 +65,18 @@ impl StatsTracker {
         self.store.persist()
     }
 
-    pub fn stats(&self) -> &StatsData {
-        self.store.data()
+    pub fn usage(&self) -> &UsageStats {
+        self.store.snapshot()
     }
 }
 
-fn prune_daily_usage(data: &mut StatsData) {
-    if data.daily_usage.len() > 120 {
-        let mut keys: Vec<String> = data.daily_usage.keys().cloned().collect();
+fn prune_daily_usage(stats: &mut UsageStats) {
+    if stats.daily_usage.len() > 120 {
+        let mut keys: Vec<String> = stats.daily_usage.keys().cloned().collect();
         keys.sort();
         let cutoff = keys.len().saturating_sub(90);
         for key in keys.iter().take(cutoff) {
-            data.daily_usage.remove(key);
+            stats.daily_usage.remove(key);
         }
     }
 }
@@ -88,19 +93,21 @@ mod tests {
 
     #[test]
     fn record_usage_tracks_provider_and_daily() {
-        let mut st = StatsTracker::default();
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut st = StatsTracker::from_path(dir.path().join("stats.json"));
         st.record_usage("openrouter");
-        assert_eq!(st.stats().total_prompts, 1);
-        assert_eq!(st.stats().provider_usage.get("openrouter"), Some(&1));
-        assert_eq!(st.stats().daily_usage.len(), 1);
+        assert_eq!(st.usage().total_prompts, 1);
+        assert_eq!(st.usage().provider_usage.get("openrouter"), Some(&1));
+        assert_eq!(st.usage().daily_usage.len(), 1);
     }
 
     #[test]
     fn record_usage_accumulates_same_provider() {
-        let mut st = StatsTracker::default();
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut st = StatsTracker::from_path(dir.path().join("stats.json"));
         st.record_usage("openai");
         st.record_usage("openai");
-        assert_eq!(st.stats().total_prompts, 2);
-        assert_eq!(st.stats().provider_usage.get("openai"), Some(&2));
+        assert_eq!(st.usage().total_prompts, 2);
+        assert_eq!(st.usage().provider_usage.get("openai"), Some(&2));
     }
 }

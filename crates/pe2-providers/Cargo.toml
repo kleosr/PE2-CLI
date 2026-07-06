@@ -12,8 +12,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
-thiserror = { workspace = true }
-anyhow = { workspace = true }
-once_cell = { workspace = true }
-tracing = { workspace = true }
 async-trait = { workspace = true }

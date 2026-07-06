@@ -1,0 +1,9 @@
+pub const PROMPT_MIN_LENGTH: usize = 10;
+pub const PROMPT_MAX_LENGTH: usize = 10000;
+pub const PROMPT_PREVIEW_MAX_LENGTH: usize = 200;
+pub const PROMPT_PROCESSING_DISPLAY_MAX_LENGTH: usize = 100;
+pub const SHORT_API_KEY_THRESHOLD: usize = 12;
+pub const SHORT_API_KEY_PREFIX: usize = 4;
+pub const SHORT_API_KEY_SUFFIX: usize = 4;
+pub const DEFAULT_QUALITY_SCORE: f64 = 8.0;
+pub const COMPLEXITY_SCORE_MAX: u32 = 20;

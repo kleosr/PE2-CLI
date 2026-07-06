@@ -1,7 +1,12 @@
 {
   "name": "@kleosr/pe2-cli",
-  "version": "4.0.3",
+  "version": "4.0.2",
   "description": "Convert raw prompts to PE²-structured prompts — Rust native CLI",
+  "files": [
+    "README.md",
+    "index.js",
+    "package.json"
+  ],
   "keywords": [
     "pe2",
     "prompt-engineering",
@@ -31,11 +36,11 @@
   "os": ["win32", "darwin", "linux"],
   "cpu": ["x64", "arm64"],
   "optionalDependencies": {
-    "@kleosr/pe2-cli-win32-x64": "4.0.1",
-    "@kleosr/pe2-cli-win32-arm64": "4.0.1",
-    "@kleosr/pe2-cli-darwin-x64": "4.0.1",
-    "@kleosr/pe2-cli-darwin-arm64": "4.0.1",
-    "@kleosr/pe2-cli-linux-x64": "4.0.1",
-    "@kleosr/pe2-cli-linux-arm64": "4.0.1"
+    "@kleosr/pe2-cli-win32-x64": "4.0.2",
+    "@kleosr/pe2-cli-win32-arm64": "4.0.2",
+    "@kleosr/pe2-cli-darwin-x64": "4.0.2",
+    "@kleosr/pe2-cli-darwin-arm64": "4.0.2",
+    "@kleosr/pe2-cli-linux-x64": "4.0.2",
+    "@kleosr/pe2-cli-linux-arm64": "4.0.2"
   }
 }

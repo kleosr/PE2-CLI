@@ -1,5 +1,42 @@
 use crate::constants;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SlashCommand {
+    Help,
+    Config,
+    Session,
+    Prefs,
+    Stats,
+    Clear,
+    Exit,
+}
+
+pub fn resolve_slash_command(input: &str) -> Option<SlashCommand> {
+    let token = input.split_whitespace().next()?;
+    match token {
+        "/help" | "/h" => Some(SlashCommand::Help),
+        "/config" | "/c" => Some(SlashCommand::Config),
+        "/session" | "/s" => Some(SlashCommand::Session),
+        "/prefs" | "/p" => Some(SlashCommand::Prefs),
+        "/stats" => Some(SlashCommand::Stats),
+        "/clear" => Some(SlashCommand::Clear),
+        "/exit" | "/quit" | "/q" => Some(SlashCommand::Exit),
+        _ => None,
+    }
+}
+
+pub fn slash_command_token(input: &str) -> Option<&str> {
+    let token = input.split_whitespace().next()?;
+    if !token.starts_with('/') {
+        return None;
+    }
+    if resolve_slash_command(input).is_some() {
+        Some(token)
+    } else {
+        None
+    }
+}
+
 pub fn validate_prompt(prompt: &str) -> Option<String> {
     let trimmed = prompt.trim();
     if trimmed.is_empty() {
@@ -22,54 +59,67 @@ pub fn validate_prompt(prompt: &str) -> Option<String> {
     None
 }
 
-pub fn validate_and_suggest_command(command: &str) -> CommandValidation {
-    let trimmed = command.trim().to_lowercase();
-    if !trimmed.starts_with('/') {
-        return CommandValidation {
-            valid: false,
-            is_command: false,
-            message: String::new(),
-            suggestion: None,
-        };
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommandValidation {
+    NotCommand,
+    Valid,
+    Unknown {
+        command: String,
+        suggestion: Option<&'static str>,
+    },
+}
+
+impl CommandValidation {
+    pub fn is_valid(&self) -> bool {
+        matches!(self, Self::Valid)
     }
 
-    let cmd = trimmed.split_whitespace().next().unwrap_or("");
-    let known_commands = [
-        "/help", "/config", "/settings", "/model", "/showkey",
-        "/session", "/history", "/clear", "/theme", "/compact",
-        "/preferences", "/copy", "/batch", "/import", "/export",
-        "/exit", "/quit",
-    ];
-
-    if known_commands.contains(&cmd) {
-        return CommandValidation {
-            valid: true,
-            is_command: true,
-            message: String::new(),
-            suggestion: None,
-        };
+    pub fn is_command(&self) -> bool {
+        !matches!(self, Self::NotCommand)
     }
 
-    // Find closest match
-    let suggestion = known_commands
-        .iter()
-        .min_by_key(|known| str_similarity(cmd, known))
-        .copied();
-
-    CommandValidation {
-        valid: false,
-        is_command: true,
-        message: format!("Unknown command: {}. Type /help for available commands.", cmd),
-        suggestion,
+    pub fn suggestion(&self) -> Option<&'static str> {
+        match self {
+            Self::Unknown { suggestion, .. } => *suggestion,
+            _ => None,
+        }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct CommandValidation {
-    pub valid: bool,
-    pub is_command: bool,
-    pub message: String,
-    pub suggestion: Option<&'static str>,
+pub fn unknown_command_message(validation: &CommandValidation) -> Option<String> {
+    match validation {
+        CommandValidation::Unknown { command, .. } => Some(format!(
+            "Unknown command: {command}. Type /help for available commands."
+        )),
+        _ => None,
+    }
+}
+
+pub fn validate_and_suggest_command(command: &str) -> CommandValidation {
+    if !command.split_whitespace().next().is_some_and(|t| t.starts_with('/')) {
+        return CommandValidation::NotCommand;
+    }
+
+    if resolve_slash_command(command).is_some() {
+        return CommandValidation::Valid;
+    }
+
+    let Some(cmd) = command.split_whitespace().next().map(str::to_string) else {
+        return CommandValidation::NotCommand;
+    };
+    let suggestion = known_slash_tokens()
+        .iter()
+        .min_by_key(|known| str_similarity(&cmd, known))
+        .copied();
+
+    CommandValidation::Unknown { command: cmd, suggestion }
+}
+
+fn known_slash_tokens() -> &'static [&'static str] {
+    &[
+        "/help", "/h", "/config", "/c", "/session", "/s", "/prefs", "/p", "/stats", "/clear",
+        "/exit", "/quit", "/q",
+    ]
 }
 
 fn str_similarity(a: &str, b: &str) -> usize {
@@ -80,12 +130,7 @@ fn str_similarity(a: &str, b: &str) -> usize {
 }
 
 pub fn parse_slash_command(input: &str) -> Option<&str> {
-    let trimmed = input.trim();
-    if trimmed.starts_with('/') {
-        Some(trimmed.split_whitespace().next().unwrap_or(""))
-    } else {
-        None
-    }
+    slash_command_token(input)
 }
 
 #[cfg(test)]
@@ -117,7 +162,24 @@ mod tests {
 
     #[test]
     fn test_command_validation() {
-        let r = validate_and_suggest_command("/help");
-        assert!(r.valid);
+        assert_eq!(validate_and_suggest_command("/help"), CommandValidation::Valid);
+    }
+
+    #[test]
+    fn test_tui_aliases_are_known() {
+        for cmd in ["/h", "/c", "/s", "/p", "/q"] {
+            assert_eq!(
+                validate_and_suggest_command(cmd),
+                CommandValidation::Valid,
+                "expected {cmd} to be valid"
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_maps_aliases_to_canonical_command() {
+        assert_eq!(resolve_slash_command("/c"), Some(SlashCommand::Config));
+        assert_eq!(resolve_slash_command("/quit"), Some(SlashCommand::Exit));
+        assert_eq!(resolve_slash_command("/nope"), None);
     }
 }

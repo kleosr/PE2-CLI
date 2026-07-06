@@ -3,7 +3,7 @@ use pe2_core::errors::CliError;
 use pe2_core::messages::Message;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ProviderKind {
     OpenAI,
     Anthropic,
@@ -14,10 +14,10 @@ pub enum ProviderKind {
 
 impl ProviderKind {
     pub fn from_str_result(s: &str) -> Result<Self, CliError> {
-        Self::from_str(s).ok_or_else(|| CliError::Config(format!("Unknown provider: {}", s)))
+        s.parse()
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "openai" => Some(ProviderKind::OpenAI),
             "anthropic" => Some(ProviderKind::Anthropic),
@@ -49,27 +49,11 @@ impl ProviderKind {
     }
 
     pub fn default_model(&self) -> &'static str {
-        match self {
-            ProviderKind::OpenAI => "gpt-4o-mini",
-            ProviderKind::Anthropic => "claude-sonnet-4-20250514",
-            ProviderKind::Google => "gemini-2.0-flash",
-            ProviderKind::OpenRouter => "openai/gpt-4o-mini",
-            ProviderKind::Ollama => "llama3.2",
-        }
+        pe2_core::constants::default_model_for_provider(self.as_str())
     }
 
     pub fn models(&self) -> &[&'static str] {
-        match self {
-            ProviderKind::OpenAI => &["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-            ProviderKind::Anthropic => &["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
-            ProviderKind::Google => &["gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-pro", "gemini-1.5-flash"],
-            ProviderKind::OpenRouter => &[
-                "openai/gpt-4o", "openai/gpt-4o-mini", "openai/gpt-4-turbo",
-                "anthropic/claude-sonnet-4-20250514", "anthropic/claude-3.5-sonnet",
-                "google/gemini-2.0-flash-001", "google/gemini-2.0-pro",
-            ],
-            ProviderKind::Ollama => &["llama3.2", "llama3.1", "mistral", "mixtral", "codellama", "phi4"],
-        }
+        pe2_core::constants::models_for_provider(self.as_str())
     }
 
     pub fn all() -> Vec<ProviderKind> {
@@ -80,6 +64,14 @@ impl ProviderKind {
             ProviderKind::OpenRouter,
             ProviderKind::Ollama,
         ]
+    }
+}
+
+impl std::str::FromStr for ProviderKind {
+    type Err = CliError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s).ok_or_else(|| CliError::Config(format!("Unknown provider: {s}")))
     }
 }
 

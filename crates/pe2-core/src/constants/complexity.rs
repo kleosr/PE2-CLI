@@ -1,0 +1,10 @@
+pub const COMPLEXITY_WORD_VERY_HIGH: usize = 400;
+pub const COMPLEXITY_WORD_HIGH: usize = 250;
+pub const COMPLEXITY_WORD_MEDIUM: usize = 120;
+pub const COMPLEXITY_WORD_LOW: usize = 60;
+pub const MAX_TECH_INDICATORS: usize = 4;
+pub const MAX_DOMAIN_INDICATORS: usize = 3;
+pub const MAX_STRUCTURAL_MATCHES: usize = 4;
+pub const MAX_LOGIC_MATCHES: usize = 3;
+pub const SPECIAL_CHARS_HIGH: usize = 5;
+pub const SPECIAL_CHARS_MEDIUM: usize = 2;

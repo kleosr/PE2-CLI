@@ -1,9 +1,8 @@
 use async_trait::async_trait;
-use pe2_core::constants;
 use pe2_core::errors::CliError;
 use pe2_core::messages::Message;
-use crate::client::{LlmClient, ProviderConfig, ProviderResponse};
-use crate::http::parse_json_response;
+use crate::client::{LlmClient, ProviderConfig, ProviderResponse, ProviderKind};
+use crate::http::{build_http_client, check_success, post_json};
 
 pub struct AnthropicClient {
     client: reqwest::Client,
@@ -12,10 +11,11 @@ pub struct AnthropicClient {
 
 impl AnthropicClient {
     pub fn new(config: &ProviderConfig) -> Result<Self, CliError> {
-        let api_key = config.api_key()
+        let api_key = config
+            .api_key()
             .ok_or_else(|| CliError::Auth("Anthropic API key is required".to_string()))?;
         Ok(Self {
-            client: reqwest::Client::new(),
+            client: build_http_client()?,
             api_key: api_key.to_string(),
         })
     }
@@ -37,6 +37,42 @@ fn extract_system(messages: &[Message]) -> (Option<String>, Vec<serde_json::Valu
     (system, msgs)
 }
 
+fn build_body(
+    model: &str,
+    messages: &[Message],
+    max_tokens: u32,
+    temperature: f64,
+) -> serde_json::Value {
+    let (system_text, anthropic_messages) = extract_system(messages);
+    let mut body = serde_json::json!({
+        "model": model,
+        "messages": anthropic_messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    });
+    if let Some(sys) = system_text {
+        body["system"] = serde_json::Value::String(sys);
+    }
+    body
+}
+
+fn extract_content(json: &serde_json::Value, model: &str) -> Result<ProviderResponse, CliError> {
+    let content = json["content"]
+        .as_array()
+        .and_then(|arr| arr.first())
+        .and_then(|block| block["text"].as_str())
+        .ok_or_else(|| CliError::Provider {
+            provider: "anthropic".to_string(),
+            message: "Empty response from model".to_string(),
+        })?
+        .to_string();
+    Ok(ProviderResponse {
+        content,
+        model: model.to_string(),
+        provider: ProviderKind::Anthropic,
+    })
+}
+
 #[async_trait]
 impl LlmClient for AnthropicClient {
     async fn chat(
@@ -46,54 +82,28 @@ impl LlmClient for AnthropicClient {
         max_tokens: u32,
         temperature: f64,
     ) -> Result<ProviderResponse, CliError> {
-        let (system_text, anthropic_messages) = extract_system(messages);
-
-        let mut body = serde_json::json!({
-            "model": model,
-            "messages": anthropic_messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        });
-
-        if let Some(sys) = system_text {
-            body["system"] = serde_json::Value::String(sys);
-        }
-
-        let response = self.client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .timeout(std::time::Duration::from_millis(constants::REQUEST_TIMEOUT_MS))
-            .send()
-            .await
-            .map_err(|e| CliError::Network(e.to_string()))?;
-
-        let (status, json) = parse_json_response(response, "anthropic").await?;
-
-        if !status.is_success() {
-            let err_msg = json["error"]["message"].as_str().unwrap_or("Unknown error");
-            return Err(CliError::Provider {
-                provider: "anthropic".to_string(),
-                message: err_msg.to_string(),
-            });
-        }
-
-        let content = json["content"]
-            .as_array()
-            .and_then(|arr| arr.first())
-            .and_then(|block| block["text"].as_str())
-            .ok_or_else(|| CliError::Provider {
-                provider: "anthropic".to_string(),
-                message: "Empty response from model".to_string(),
-            })?
-            .to_string();
-
-        Ok(ProviderResponse {
-            content,
-            model: model.to_string(),
-            provider: crate::client::ProviderKind::Anthropic,
-        })
+        let body = build_body(model, messages, max_tokens, temperature);
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("x-api-key", self.api_key.parse().map_err(|_| {
+            CliError::Auth("Invalid Anthropic API key format".to_string())
+        })?);
+        headers.insert(
+            "anthropic-version",
+            reqwest::header::HeaderValue::from_static("2023-06-01"),
+        );
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            reqwest::header::HeaderValue::from_static("application/json"),
+        );
+        let (status, json) = post_json(
+            &self.client,
+            "https://api.anthropic.com/v1/messages",
+            headers,
+            &body,
+            "anthropic",
+        )
+        .await?;
+        check_success(status, &json, "anthropic")?;
+        extract_content(&json, model)
     }
 }
