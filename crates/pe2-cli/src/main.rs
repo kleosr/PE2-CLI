@@ -1,18 +1,15 @@
 use anyhow::Context as AnyhowContext;
 use clap::Parser;
-use colored::Colorize;
 use pe2_cli::args::Args;
-use pe2_core::config;
-use pe2_core::engine::{Pipeline, PipelineRunOptions};
+use pe2_core::config::{self, Config};
+use pe2_core::engine::PipelineRunOptions;
 use pe2_core::errors::CliError;
-use pe2_providers::adapter::LlmClientAdapter;
-use pe2_providers::client::{ProviderConfig, ProviderKind};
 use pe2_tui::banner::print_banner;
-use pe2_tui::display::{
-    create_spinner, print_complexity_analysis, print_error, print_info, print_metrics,
-    print_prompt_result, print_refinement_history, print_success,
-};
+use pe2_tui::display::print_error;
 use pe2_tui::interactive::setup_and_run_interactive;
+use pe2_tui::prompt_flow::{
+    generate_prompt_with_spinner, render_complexity_preflight, render_generation_result,
+};
 use std::path::Path;
 
 #[tokio::main]
@@ -41,32 +38,40 @@ async fn run(args: Args) -> anyhow::Result<()> {
         )
         .init();
 
-    if args.config || args.prompt.is_none() {
-        return setup_and_run_interactive().await;
+    if args.config {
+        return setup_and_run_interactive().await.map_err(Into::into);
     }
 
-    let prompt = args.prompt.as_ref().unwrap();
-    let prompt = if Path::new(prompt).exists() {
-        std::fs::read_to_string(prompt)
-            .with_context(|| format!("Failed to read prompt file: {}", prompt))?
-    } else {
-        prompt.clone()
+    let Some(prompt_arg) = args.prompt.as_ref() else {
+        return setup_and_run_interactive().await.map_err(Into::into);
     };
-
-    if prompt.trim().is_empty() {
-        anyhow::bail!("Prompt cannot be empty");
-    }
-
-    run_single_prompt(args, &prompt).await
+    let prompt = load_prompt_text(prompt_arg)?;
+    run_single_prompt(&args, &prompt).await
 }
 
-async fn run_single_prompt(args: Args, raw_prompt: &str) -> anyhow::Result<()> {
+fn load_prompt_text(prompt: &str) -> anyhow::Result<String> {
+    let text = if Path::new(prompt).exists() {
+        std::fs::read_to_string(prompt)
+            .with_context(|| format!("Failed to read prompt file: {prompt}"))?
+    } else {
+        prompt.to_string()
+    };
+    Ok(text)
+}
+
+async fn run_single_prompt(args: &Args, raw_prompt: &str) -> anyhow::Result<()> {
     print_banner();
-
+    let cfg = build_config_from_args(args);
     let analysis = pe2_core::analysis::analyze_prompt_complexity(raw_prompt);
-    print_complexity_analysis(&analysis);
+    render_complexity_preflight(&analysis, &cfg.provider, &cfg.model);
 
-    let mut cfg = config::load_config();
+    let result = generate_prompt_with_spinner(cfg, pipeline_options(args), raw_prompt).await?;
+    render_generation_result(&result);
+    Ok(())
+}
+
+fn build_config_from_args(args: &Args) -> Config {
+    let mut cfg = config::load_config_or_default();
     if let Some(provider) = &args.provider {
         cfg.provider = provider.clone();
     }
@@ -77,43 +82,23 @@ async fn run_single_prompt(args: Args, raw_prompt: &str) -> anyhow::Result<()> {
         cfg.api_key = Some(key.clone());
     }
     cfg.output_file = args.output_file.clone();
-
-    let kind = ProviderKind::from_str_result(&cfg.provider)?;
-    let provider_config = ProviderConfig {
-        kind,
-        base_url: None,
-        api_key: config::resolve_api_key(&cfg.provider, cfg.api_key.as_deref()),
-    };
-
-    print_info(&format!(
-        "Using {} / {}",
-        cfg.provider.bright_cyan(),
-        cfg.model.bright_white()
-    ));
-
-    let spinner = create_spinner("Generating prompt...");
-
-    let raw_client = pe2_providers::factory::create_client(&provider_config)?;
-    let options = PipelineRunOptions {
-        iterations_override: args.iterations,
-        max_tokens: args.max_tokens,
-        temperature: args.temperature,
-    };
-    let mut pipeline = Pipeline::with_options(
-        Box::new(LlmClientAdapter::new(raw_client)),
-        cfg.clone(),
-        options,
-    );
-    let result = pipeline.run(raw_prompt).await?;
-
-    spinner.finish_and_clear();
-
-    print_success("Prompt generation complete!");
-    print_prompt_result(&result.prompt, &result.output_file);
-    print_refinement_history(&result.history);
-    print_metrics(&result.metrics);
-
-    Ok(())
+    cfg
 }
 
+fn pipeline_options(args: &Args) -> PipelineRunOptions {
+    PipelineRunOptions {
+        iterations_override: resolve_iterations(args),
+        max_tokens: args.max_tokens,
+        temperature: args.temperature,
+    }
+}
 
+fn resolve_iterations(args: &Args) -> Option<u32> {
+    if args.iterations.is_some() {
+        args.iterations
+    } else if args.auto_difficulty {
+        None
+    } else {
+        Some(1)
+    }
+}

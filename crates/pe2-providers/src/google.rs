@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use pe2_core::constants;
 use pe2_core::errors::CliError;
 use pe2_core::messages::Message;
-use crate::client::{LlmClient, ProviderConfig, ProviderResponse};
-use crate::http::parse_json_response;
+use crate::client::{LlmClient, ProviderConfig, ProviderResponse, ProviderKind};
+use crate::http::{build_http_client, check_success, post_json, validate_model_id};
+use crate::headers::build_google_headers;
 
 pub struct GoogleClient {
     client: reqwest::Client,
@@ -12,21 +12,37 @@ pub struct GoogleClient {
 
 impl GoogleClient {
     pub fn new(config: &ProviderConfig) -> Result<Self, CliError> {
-        let api_key = config.api_key()
+        let api_key = config
+            .api_key()
             .ok_or_else(|| CliError::Auth("Google API key is required".to_string()))?;
         Ok(Self {
-            client: reqwest::Client::new(),
+            client: build_http_client()?,
             api_key: api_key.to_string(),
         })
     }
 }
 
 fn flatten_messages(messages: &[Message]) -> String {
-    let mut parts = Vec::new();
-    for msg in messages {
-        parts.push(format!("{}: {}", msg.role, msg.content));
-    }
-    parts.join("\n")
+    messages
+        .iter()
+        .map(|msg| format!("{}: {}", msg.role, msg.content))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn extract_content(json: &serde_json::Value, model: &str) -> Result<ProviderResponse, CliError> {
+    let content = json["candidates"][0]["content"]["parts"][0]["text"]
+        .as_str()
+        .ok_or_else(|| CliError::Provider {
+            provider: "google".to_string(),
+            message: "Empty response from model".to_string(),
+        })?
+        .to_string();
+    Ok(ProviderResponse {
+        content,
+        model: model.to_string(),
+        provider: ProviderKind::Google,
+    })
 }
 
 #[async_trait]
@@ -38,56 +54,31 @@ impl LlmClient for GoogleClient {
         max_tokens: u32,
         temperature: f64,
     ) -> Result<ProviderResponse, CliError> {
+        validate_model_id(model)?;
         let prompt_text = flatten_messages(messages);
-
         let body = serde_json::json!({
             "contents": [{
-                "parts": [{
-                    "text": prompt_text
-                }]
+                "parts": [{ "text": prompt_text }]
             }],
             "generationConfig": {
                 "temperature": temperature,
                 "maxOutputTokens": max_tokens
             }
         });
-
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            model, self.api_key
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+            model
         );
-
-        let response = self.client
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .timeout(std::time::Duration::from_millis(constants::REQUEST_TIMEOUT_MS))
-            .send()
-            .await
-            .map_err(|e| CliError::Network(e.to_string()))?;
-
-        let (status, json) = parse_json_response(response, "google").await?;
-
-        if !status.is_success() {
-            let err_msg = json["error"]["message"].as_str().unwrap_or("Unknown error");
-            return Err(CliError::Provider {
-                provider: "google".to_string(),
-                message: err_msg.to_string(),
-            });
-        }
-
-        let content = json["candidates"][0]["content"]["parts"][0]["text"]
-            .as_str()
-            .ok_or_else(|| CliError::Provider {
-                provider: "google".to_string(),
-                message: "Empty response from model".to_string(),
-            })?
-            .to_string();
-
-        Ok(ProviderResponse {
-            content,
-            model: model.to_string(),
-            provider: crate::client::ProviderKind::Google,
-        })
+        let headers = build_google_headers(&self.api_key)?;
+        let (status, json) = post_json(
+            &self.client,
+            &url,
+            headers,
+            &body,
+            "google",
+        )
+        .await?;
+        check_success(status, &json, "google")?;
+        extract_content(&json, model)
     }
 }

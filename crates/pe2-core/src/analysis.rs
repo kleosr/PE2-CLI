@@ -63,55 +63,54 @@ fn word_score(word_count: usize) -> u32 {
     }
 }
 
-pub fn analyze_prompt_complexity(raw_prompt: &str) -> ComplexityResult {
-    let word_count = raw_prompt.split_whitespace().count();
-    let prompt_lower = raw_prompt.to_lowercase();
+struct PatternScores {
+    tech: u32,
+    domain: u32,
+    structural: u32,
+    logic: u32,
+    special: u32,
+}
 
-    let tech_count = constants::TECH_PATTERNS
+fn pattern_scores(raw_prompt: &str, prompt_lower: &str) -> PatternScores {
+    let tech = constants::TECH_PATTERNS
         .iter()
         .filter(|r| r.is_match(raw_prompt))
         .count()
-        .min(constants::MAX_TECH_INDICATORS);
-
-    let domain_count = constants::DOMAIN_PATTERNS
+        .min(constants::MAX_TECH_INDICATORS) as u32;
+    let domain = constants::DOMAIN_PATTERNS
         .iter()
         .filter(|r| r.is_match(raw_prompt))
         .count()
-        .min(constants::MAX_DOMAIN_INDICATORS);
-
-    let structural_matches = constants::STRUCTURAL_PATTERN
+        .min(constants::MAX_DOMAIN_INDICATORS) as u32;
+    let structural = constants::STRUCTURAL_PATTERN
         .find_iter(raw_prompt)
         .count()
-        .min(constants::MAX_STRUCTURAL_MATCHES);
-
-    let logic_matches = constants::LOGIC_PATTERN
-        .find_iter(&prompt_lower)
+        .min(constants::MAX_STRUCTURAL_MATCHES) as u32;
+    let logic = constants::LOGIC_PATTERN
+        .find_iter(prompt_lower)
         .count()
-        .min(constants::MAX_LOGIC_MATCHES);
-
-    let special_char_count = constants::SPECIAL_CHARS_PATTERN
+        .min(constants::MAX_LOGIC_MATCHES) as u32;
+    let special_chars = constants::SPECIAL_CHARS_PATTERN
         .find_iter(raw_prompt)
         .count();
-
-    let special_score = if special_char_count >= constants::SPECIAL_CHARS_HIGH {
+    let special = if special_chars >= constants::SPECIAL_CHARS_HIGH {
         2
-    } else if special_char_count >= constants::SPECIAL_CHARS_MEDIUM {
+    } else if special_chars >= constants::SPECIAL_CHARS_MEDIUM {
         1
     } else {
         0
     };
+    PatternScores {
+        tech,
+        domain,
+        structural,
+        logic,
+        special,
+    }
+}
 
-    let base_score = word_score(word_count);
-    let mut score = base_score
-        + tech_count as u32
-        + domain_count as u32
-        + structural_matches as u32
-        + logic_matches as u32
-        + special_score;
-
-    score = score.min(constants::COMPLEXITY_SCORE_MAX);
-
-    let (difficulty, iterations) = if score <= 4 {
+fn difficulty_from_score(score: u32) -> (Difficulty, u32) {
+    if score <= 4 {
         (Difficulty::Novice, 1)
     } else if score <= 8 {
         (Difficulty::Intermediate, 2)
@@ -121,8 +120,21 @@ pub fn analyze_prompt_complexity(raw_prompt: &str) -> ComplexityResult {
         (Difficulty::Expert, 4)
     } else {
         (Difficulty::Master, 5)
-    };
+    }
+}
 
+pub fn analyze_prompt_complexity(raw_prompt: &str) -> ComplexityResult {
+    let word_count = raw_prompt.split_whitespace().count();
+    let prompt_lower = raw_prompt.to_lowercase();
+    let patterns = pattern_scores(raw_prompt, &prompt_lower);
+    let score = (word_score(word_count)
+        + patterns.tech
+        + patterns.domain
+        + patterns.structural
+        + patterns.logic
+        + patterns.special)
+        .min(constants::COMPLEXITY_SCORE_MAX);
+    let (difficulty, iterations) = difficulty_from_score(score);
     ComplexityResult {
         score,
         difficulty,
@@ -137,8 +149,9 @@ mod tests {
 
     #[test]
     fn test_simple_prompt() {
-        let r = analyze_prompt_complexity("this is a simple prompt with enough words");
-        assert!(r.score >= 0);
+        let prompt = format!("{} api", "word ".repeat(20));
+        let r = analyze_prompt_complexity(&prompt);
+        assert!(r.score > 0);
         assert!(r.iterations >= 1);
     }
 

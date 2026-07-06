@@ -4,6 +4,17 @@ use std::path::Path;
 use crate::constants;
 use crate::errors::CliError;
 
+pub fn write_text_atomic(path: &Path, content: &str) -> Result<(), CliError> {
+    let tmp_path = path.with_extension(format!(".tmp.{}", std::process::id()));
+    {
+        let mut file = std::fs::File::create(&tmp_path)?;
+        file.write_all(content.as_bytes())?;
+        file.sync_all()?;
+    }
+    std::fs::rename(&tmp_path, path)?;
+    Ok(())
+}
+
 pub fn write_json_atomic<T: Serialize>(path: &Path, data: &T) -> Result<(), CliError> {
     let tmp_path = path.with_extension(format!(
         ".tmp.{}",

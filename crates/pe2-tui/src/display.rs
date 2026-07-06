@@ -1,24 +1,19 @@
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
-use pe2_core::analysis::{ComplexityResult, Difficulty};
+use pe2_core::analysis::ComplexityResult;
 use pe2_core::engine::{Metrics, RefinementEntry, StructuredPrompt};
+use pe2_core::errors::CliError;
 use crate::theme::{styled_label, styled_value, PE2_THEME};
 
-pub fn print_complexity_analysis(analysis: &ComplexityResult) {
-    let emoji = match analysis.difficulty {
-        Difficulty::Novice => "🟢",
-        Difficulty::Intermediate => "🟡",
-        Difficulty::Advanced => "🟠",
-        Difficulty::Expert => "🔴",
-        Difficulty::Master => "🟣",
-    };
+const SPINNER_TEMPLATE: &str = "{spinner:.green} {msg}";
 
+pub fn print_complexity_analysis(analysis: &ComplexityResult) {
     println!();
     println!(
         "  {} {}: {} {} ({} iterations)",
         "◇".bright_blue(),
         styled_label("Difficulty"),
-        emoji,
+        analysis.difficulty.emoji(),
         analysis.difficulty.label().bold(),
         analysis.iterations,
     );
@@ -37,28 +32,22 @@ pub fn print_complexity_analysis(analysis: &ComplexityResult) {
     println!();
 }
 
+fn print_prompt_field(prefix: &str, label: &str, value: &str) {
+    println!("  {} {}", prefix, styled_label(label));
+    for line in value.lines() {
+        println!("  {} {}", "│  ".dimmed(), styled_value(line));
+    }
+    println!();
+}
+
 pub fn print_prompt_result(prompt: &StructuredPrompt, output_file: &str) {
     println!();
     println!("  {} {}", "┌".dimmed(), "Optimized Prompt".bright_white().bold());
-    println!("  {} {}", "├─".dimmed(), styled_label("Context:"));
-    println!("  {} {}", "│  ".dimmed(), styled_value(&prompt.context));
-    println!();
-    println!("  {} {}", "├─".dimmed(), styled_label("Role:"));
-    println!("  {} {}", "│  ".dimmed(), styled_value(&prompt.role));
-    println!();
-    println!("  {} {}", "├─".dimmed(), styled_label("Task:"));
-    for line in prompt.task.lines() {
-        println!("  {} {}", "│  ".dimmed(), styled_value(line));
-    }
-    println!();
-    println!("  {} {}", "├─".dimmed(), styled_label("Constraints:"));
-    for line in prompt.constraints.lines() {
-        println!("  {} {}", "│  ".dimmed(), styled_value(line));
-    }
-    println!();
-    println!("  {} {}", "├─".dimmed(), styled_label("Output:"));
-    println!("  {} {}", "│  ".dimmed(), styled_value(&prompt.output));
-    println!();
+    print_prompt_field("├─", "Context:", &prompt.context);
+    print_prompt_field("├─", "Role:", &prompt.role);
+    print_prompt_field("├─", "Task:", &prompt.task);
+    print_prompt_field("├─", "Constraints:", &prompt.constraints);
+    print_prompt_field("├─", "Output:", &prompt.output);
     println!("  {} {}", "└─".dimmed(), styled_label("Saved to:"));
     println!("  {}   {}", " ".dimmed(), output_file.bright_cyan().underline());
     println!();
@@ -70,18 +59,18 @@ pub fn print_refinement_history(history: &[RefinementEntry]) {
     }
     println!(
         "  {} {}",
-        "◆".bright_magenta(),
-        "Refinement History".bright_white().bold()
+        (PE2_THEME.primary)("◆".to_string()),
+        (PE2_THEME.highlight)("Refinement History".to_string())
     );
     for entry in history {
         let label = format!("Iteration {}", entry.iteration);
         let short = entry.edits.chars().take(120).collect::<String>();
         println!(
             "  {} {} {} {}",
-            " ".dimmed(),
+            (PE2_THEME.muted)(" ".to_string()),
             (PE2_THEME.secondary)(label),
-            "·".dimmed(),
-            short.dimmed(),
+            (PE2_THEME.muted)("·".to_string()),
+            (PE2_THEME.muted)(short),
         );
     }
     println!();
@@ -97,43 +86,55 @@ pub fn print_metrics(metrics: &Metrics) {
         .add_row(vec!["Quality Score", &metrics.quality_score])
         .add_row(vec!["Iterations", &metrics.iterations_applied.to_string()]);
 
-    println!("  {}", "Performance Metrics".bright_white().bold());
-    let table_str = table.to_string();
-    for line in table_str.lines() {
-        println!("  {} {}", " ".dimmed(), line.dimmed());
+    println!("  {}", (PE2_THEME.highlight)("Performance Metrics".to_string()));
+    for line in table.to_string().lines() {
+        println!(
+            "  {} {}",
+            (PE2_THEME.muted)(" ".to_string()),
+            (PE2_THEME.muted)(line.to_string())
+        );
     }
     println!();
 }
 
 pub fn print_error(msg: &str) {
-    eprintln!("  {} {}", "✖".bright_red(), msg.bright_red());
+    eprintln!("  ✖ {}", (PE2_THEME.error)(msg.to_string()));
 }
 
 pub fn print_success(msg: &str) {
-    println!("  {} {}", "✔".bright_green(), msg.bright_green());
+    println!("  ✔ {}", (PE2_THEME.success)(msg.to_string()));
 }
 
 pub fn print_info(msg: &str) {
-    println!("  {} {}", "ℹ".bright_blue(), msg.bright_white());
+    println!("  ℹ {}", (PE2_THEME.primary)(msg.to_string()));
 }
 
 pub fn print_warning(msg: &str) {
-    println!("  {} {}", "⚠".bright_yellow(), msg.bright_yellow());
+    println!("  ⚠ {}", (PE2_THEME.warning)(msg.to_string()));
 }
 
 pub fn print_separator() {
-    println!("  {}", "─".repeat(60).dimmed());
+    println!("  {}", (PE2_THEME.border)("─".repeat(60)));
 }
 
-pub fn create_spinner(msg: &str) -> ProgressBar {
+pub fn create_spinner(msg: &str) -> Result<ProgressBar, CliError> {
+    let style = ProgressStyle::with_template(SPINNER_TEMPLATE)
+        .map_err(|e| CliError::Runtime(e.to_string()))?
+        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏");
     let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
+    pb.set_style(style);
     pb.set_message(format!("  {}", msg));
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
-    pb
+    Ok(pb)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use indicatif::ProgressStyle;
+
+    #[test]
+    fn spinner_template_is_valid() {
+        assert!(ProgressStyle::with_template(SPINNER_TEMPLATE).is_ok());
+    }
 }

@@ -1,19 +1,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use crate::config::preferences_file_path;
 use crate::constants;
 use crate::errors::CliError;
 use crate::json_store::JsonStore;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PreferencesData {
+pub struct UserPrefs {
     pub theme: String,
     pub compact: bool,
     pub track_usage: bool,
     pub last_used_commands: VecDeque<String>,
 }
 
-impl Default for PreferencesData {
+impl Default for UserPrefs {
     fn default() -> Self {
         Self {
             theme: "default".to_string(),
@@ -26,54 +27,62 @@ impl Default for PreferencesData {
 
 #[derive(Debug)]
 pub struct UserPreferences {
-    store: JsonStore<PreferencesData>,
+    store: JsonStore<UserPrefs>,
 }
 
 impl UserPreferences {
     pub fn new() -> Self {
+        Self::from_path(preferences_file_path())
+    }
+
+    pub fn from_path(path: PathBuf) -> Self {
         Self {
-            store: JsonStore::load(preferences_file_path()),
+            store: JsonStore::load_or_default(path),
         }
     }
 
     pub fn theme(&self) -> &str {
-        &self.store.data().theme
+        &self.store.snapshot().theme
     }
 
     pub fn compact(&self) -> bool {
-        self.store.data().compact
+        self.store.snapshot().compact
     }
 
     pub fn track_usage(&self) -> bool {
-        self.store.data().track_usage
+        self.store.snapshot().track_usage
     }
 
     pub fn set_theme(&mut self, theme: String) {
-        self.store.data_mut().theme = theme;
+        self.store.snapshot_mut().theme = theme;
         self.store.persist_best_effort();
     }
 
     pub fn set_compact(&mut self, compact: bool) {
-        self.store.data_mut().compact = compact;
+        self.store.snapshot_mut().compact = compact;
         self.store.persist_best_effort();
     }
 
     pub fn set_track_usage(&mut self, track: bool) {
-        self.store.data_mut().track_usage = track;
+        self.store.snapshot_mut().track_usage = track;
         self.store.persist_best_effort();
     }
 
     pub fn track_command(&mut self, command: &str) {
-        let data = self.store.data_mut();
-        if data.last_used_commands.len() >= constants::MAX_LAST_USED_COMMANDS {
-            data.last_used_commands.pop_front();
+        let prefs = self.store.snapshot_mut();
+        if prefs.last_used_commands.len() >= constants::MAX_LAST_USED_COMMANDS {
+            prefs.last_used_commands.pop_front();
         }
-        data.last_used_commands.push_back(command.to_string());
+        prefs.last_used_commands.push_back(command.to_string());
         self.store.persist_best_effort();
     }
 
     pub fn last_used_commands(&self) -> impl Iterator<Item = &str> {
-        self.store.data().last_used_commands.iter().map(|s| s.as_str())
+        self.store
+            .snapshot()
+            .last_used_commands
+            .iter()
+            .map(|s| s.as_str())
     }
 
     pub fn force_save(&self) -> Result<(), CliError> {

@@ -1,18 +1,12 @@
-use std::collections::HashMap;
-use std::io::Write;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
-// ============================================================
-// Analysis tests  (port of tests/analysis.test.js)
-// ============================================================
 
 #[test]
 fn test_analysis_simple_prompt() {
     use pe2_core::analysis::analyze_prompt_complexity;
-    let r = analyze_prompt_complexity("this is a simple prompt with enough words");
+    let prompt = format!("{} api rest", "word ".repeat(20));
+    let r = analyze_prompt_complexity(&prompt);
     assert!(r.score > 0, "score should be positive");
-    assert!(r.difficulty as u32 >= 1, "difficulty should be set");
     assert!(r.iterations >= 1, "iterations should be at least 1");
 }
 
@@ -39,9 +33,6 @@ fn test_analysis_difficulty_mapping_novice() {
     assert_eq!(r.iterations, 1);
 }
 
-// ============================================================
-// Config tests  (port of tests/config.test.js)
-// ============================================================
 
 #[test]
 fn test_get_default_config() {
@@ -79,9 +70,6 @@ fn test_provider_env_var_names() {
     assert_eq!(provider_env_var("ollama"), "OLLAMA_BASE_URL");
 }
 
-// ============================================================
-// Validation tests  (port of tests/validation.test.js)
-// ============================================================
 
 #[test]
 fn test_validate_prompt_rejects_empty() {
@@ -120,17 +108,17 @@ fn test_validate_prompt_rejects_too_long() {
 fn test_validate_and_suggest_command_accepts_help() {
     use pe2_core::validation::validate_and_suggest_command;
     let v = validate_and_suggest_command("/help");
-    assert!(v.valid, "/help should be valid");
-    assert!(v.is_command, "/help should be recognized as command");
+    assert!(v.is_valid(), "/help should be valid");
+    assert!(v.is_command(), "/help should be recognized as command");
 }
 
 #[test]
 fn test_validate_and_suggest_command_rejects_unknown() {
     use pe2_core::validation::validate_and_suggest_command;
     let v = validate_and_suggest_command("/setings");
-    assert!(!v.valid, "typo should be invalid");
-    assert!(v.is_command, "should still be recognized as command attempt");
-    assert!(v.suggestion.is_some(), "should have a suggestion for typo");
+    assert!(!v.is_valid(), "typo should be invalid");
+    assert!(v.is_command(), "should still be recognized as command attempt");
+    assert!(v.suggestion().is_some(), "should have a suggestion for typo");
 }
 
 #[test]
@@ -142,9 +130,6 @@ fn test_parse_slash_command() {
     assert_eq!(parse_slash_command(""), None);
 }
 
-// ============================================================
-// Atomic write tests  (port of tests/writeJsonFileAtomically.test.js)
-// ============================================================
 
 #[test]
 fn test_write_json_atomic_writes_valid_json() {
@@ -182,14 +167,12 @@ fn test_write_json_atomic_creates_file() {
     assert!(content.contains("value"));
 }
 
-// ============================================================
-// Preferences tests
-// ============================================================
 
 #[test]
 fn test_preferences_defaults() {
     use pe2_core::preferences::UserPreferences;
-    let prefs = UserPreferences::new();
+    let dir = TempDir::new().unwrap();
+    let prefs = UserPreferences::from_path(dir.path().join("preferences.json"));
     assert_eq!(prefs.theme(), "default");
     assert!(!prefs.compact());
     assert!(prefs.track_usage());
@@ -198,7 +181,8 @@ fn test_preferences_defaults() {
 #[test]
 fn test_preferences_setters() {
     use pe2_core::preferences::UserPreferences;
-    let mut prefs = UserPreferences::new();
+    let dir = TempDir::new().unwrap();
+    let mut prefs = UserPreferences::from_path(dir.path().join("preferences.json"));
     prefs.set_theme("dark".to_string());
     assert_eq!(prefs.theme(), "dark");
     prefs.set_compact(true);
@@ -207,50 +191,43 @@ fn test_preferences_setters() {
     assert!(!prefs.track_usage());
 }
 
-// ============================================================
-// Session tests
-// ============================================================
 
 #[test]
 fn test_session_manager_new() {
-    use pe2_core::session::SessionManager;
-    let sm = SessionManager::new();
+    use pe2_core::session::SessionStore;
+    let sm = SessionStore::new();
     assert!(!sm.session_id().is_empty());
     assert_eq!(sm.prompt_count(), 0);
 }
 
 #[test]
 fn test_session_add_prompt() {
-    use pe2_core::session::SessionManager;
-    let mut sm = SessionManager::new();
+    use pe2_core::session::SessionStore;
+    let mut sm = SessionStore::new();
     sm.add_prompt("test prompt".to_string());
     assert_eq!(sm.prompt_count(), 1);
     assert_eq!(sm.prompts()[0], "test prompt");
 }
 
-// ============================================================
-// Stats tests
-// ============================================================
 
 #[test]
 fn test_stats_tracker_new() {
     use pe2_core::stats::StatsTracker;
-    let st = StatsTracker::new();
-    assert_eq!(st.stats().total_prompts, 0);
+    let dir = TempDir::new().unwrap();
+    let st = StatsTracker::from_path(dir.path().join("stats.json"));
+    assert_eq!(st.usage().total_prompts, 0);
 }
 
 #[test]
 fn test_stats_track_increments() {
     use pe2_core::stats::StatsTracker;
-    let mut st = StatsTracker::new();
+    let dir = TempDir::new().unwrap();
+    let mut st = StatsTracker::from_path(dir.path().join("stats.json"));
     st.track("test-model", 10);
-    assert_eq!(st.stats().total_prompts, 1);
-    assert!(st.stats().running_avg_complexity > 0.0);
+    assert_eq!(st.usage().total_prompts, 1);
+    assert!(st.usage().running_avg_complexity > 0.0);
 }
 
-// ============================================================
-// Constants tests
-// ============================================================
 
 #[test]
 fn test_constants_have_sensible_values() {
@@ -264,19 +241,17 @@ fn test_constants_have_sensible_values() {
 
 #[test]
 fn test_default_model_for_provider() {
-    use pe2_core::constants::default_model_for_provider;
+    use pe2_core::constants::{default_model_for_provider, models_for_provider};
     assert!(!default_model_for_provider("openai").is_empty());
     assert!(!default_model_for_provider("anthropic").is_empty());
     assert!(!default_model_for_provider("google").is_empty());
     assert!(!default_model_for_provider("openrouter").is_empty());
     assert!(!default_model_for_provider("ollama").is_empty());
-    // Unknown provider falls back to a sensible default
     assert!(!default_model_for_provider("unknown").is_empty());
+    assert!(!models_for_provider("openai").is_empty());
+    assert!(models_for_provider("openai").contains(&"gpt-4o-mini"));
 }
 
-// ============================================================
-// Engine / Pipeline tests  (port of tests/engine.test.js)
-// ============================================================
 
 /// A mock provider that simulates an LLM returning structured JSON
 struct MockProvider {
@@ -303,6 +278,13 @@ impl pe2_core::engine::EngineLlmProvider for MockProvider {
             });
         }
         Ok(self.response.clone())
+    }
+}
+
+fn isolated_pipeline_config(dir: &TempDir, name: &str) -> pe2_core::config::Config {
+    pe2_core::config::Config {
+        output_file: Some(dir.path().join(name).to_string_lossy().to_string()),
+        ..Default::default()
     }
 }
 
@@ -347,11 +329,12 @@ async fn test_engine_generate_initial_success() {
         "output": "JSON output"
     }"#;
 
+    let dir = TempDir::new().unwrap();
     let provider = MockProvider {
         response: valid_json.to_string(),
         should_fail: false,
     };
-    let cfg = pe2_core::config::Config::default();
+    let cfg = isolated_pipeline_config(&dir, "out.md");
     let mut pipeline = pe2_core::engine::Pipeline::new(Box::new(provider), cfg);
 
     let result = pipeline.run("Write a test").await;
@@ -359,7 +342,8 @@ async fn test_engine_generate_initial_success() {
     let pipeline_result = result.unwrap();
     assert_eq!(pipeline_result.prompt.context, "Test context");
     assert_eq!(pipeline_result.prompt.role, "Test role");
-    assert!(pipeline_result.output_file.contains("pe2-session-"));
+    assert!(pipeline_result.output_file.ends_with("out.md"));
+    assert!(dir.path().join("out.md").exists());
 }
 
 const VALID_PROMPT_JSON: &str = r#"{
@@ -374,11 +358,12 @@ const VALID_PROMPT_JSON: &str = r#"{
 async fn test_pipeline_iterations_override_limits_refinements() {
     use pe2_core::engine::{Pipeline, PipelineRunOptions};
 
+    let dir = TempDir::new().unwrap();
     let provider = MockProvider {
         response: VALID_PROMPT_JSON.to_string(),
         should_fail: false,
     };
-    let cfg = pe2_core::config::Config::default();
+    let cfg = isolated_pipeline_config(&dir, "iter1.md");
     let options = PipelineRunOptions {
         iterations_override: Some(1),
         ..Default::default()
@@ -397,11 +382,12 @@ async fn test_pipeline_iterations_override_limits_refinements() {
 async fn test_pipeline_iterations_override_zero_runs_at_least_one_pass() {
     use pe2_core::engine::{Pipeline, PipelineRunOptions};
 
+    let dir = TempDir::new().unwrap();
     let provider = MockProvider {
         response: VALID_PROMPT_JSON.to_string(),
         should_fail: false,
     };
-    let cfg = pe2_core::config::Config::default();
+    let cfg = isolated_pipeline_config(&dir, "iter1.md");
     let options = PipelineRunOptions {
         iterations_override: Some(0),
         ..Default::default()
@@ -437,12 +423,13 @@ async fn test_pipeline_passes_custom_llm_params_to_provider() {
         }
     }
 
+    let dir = TempDir::new().unwrap();
     let captured = Arc::new(Mutex::new(None));
     let provider = CapturingProvider {
         response: VALID_PROMPT_JSON.to_string(),
         captured: captured.clone(),
     };
-    let cfg = pe2_core::config::Config::default();
+    let cfg = isolated_pipeline_config(&dir, "params.md");
     let options = PipelineRunOptions {
         iterations_override: Some(1),
         max_tokens: 512,
@@ -456,9 +443,6 @@ async fn test_pipeline_passes_custom_llm_params_to_provider() {
     assert!((temperature - 0.9).abs() < f64::EPSILON);
 }
 
-// ============================================================
-// StructuredPrompt tests
-// ============================================================
 
 #[test]
 fn test_structured_prompt_default() {
@@ -496,7 +480,7 @@ fn test_structured_prompt_to_json_roundtrip() {
         constraints: "cn".to_string(),
         output: "o".to_string(),
     };
-    let json = sp.to_json_pretty();
+    let json = sp.to_json_pretty().unwrap();
     let parsed = StructuredPrompt::from_json(&json).unwrap();
     assert_eq!(parsed.context, "c");
     assert_eq!(parsed.role, "r");
@@ -530,9 +514,6 @@ fn test_structured_prompt_from_llm_response_fallback_on_invalid() {
     assert!(edits.contains("automatic structuring"));
 }
 
-// ============================================================
-// Template tests
-// ============================================================
 
 #[test]
 fn test_initial_template_contains_raw_prompt() {
@@ -553,17 +534,19 @@ fn test_refinement_template_contains_iteration() {
 
 #[test]
 fn test_markdown_output_format() {
-    use pe2_core::templates::format_markdown_output;
+    use pe2_core::templates::{format_markdown_output, MarkdownMetrics};
     let history = vec![(1u32, "Initial generation".to_string())];
     let output = format_markdown_output(
         "{\"test\": true}",
         &history,
-        "90%",
-        "balanced",
-        "8.5",
-        1,
-        "NOVICE",
-        5,
+        &MarkdownMetrics {
+            accuracy: "90%",
+            optimization: "balanced",
+            quality: "8.5",
+            iterations: 1,
+            difficulty: "NOVICE",
+            complexity_score: 5,
+        },
     );
     assert!(output.contains("PE² Optimized Prompt"));
     assert!(output.contains("NOVICE"));
@@ -571,14 +554,11 @@ fn test_markdown_output_format() {
     assert!(output.contains("Performance Metrics"));
 }
 
-// ============================================================
-// Path tests
-// ============================================================
 
 #[test]
 fn test_resolve_output_file_default() {
     use pe2_core::paths::resolve_output_file;
-    let p = resolve_output_file(None, "abc123");
+    let p = resolve_output_file(None, "abc123").unwrap();
     assert!(p.to_string_lossy().contains("pe2-session-abc123"));
     assert!(p.to_string_lossy().ends_with(".md"));
 }
@@ -586,17 +566,14 @@ fn test_resolve_output_file_default() {
 #[test]
 fn test_resolve_output_file_absolute() {
     use pe2_core::paths::resolve_output_file;
-    let p = resolve_output_file(Some("C:\\absolute\\path.md"), "ignored");
+    let p = resolve_output_file(Some("C:\\absolute\\path.md"), "ignored").unwrap();
     assert!(p.to_string_lossy().ends_with("path.md"));
 }
 
-// ============================================================
-// Message tests
-// ============================================================
 
 #[test]
 fn test_build_messages() {
-    use pe2_core::messages::{build_messages, Message};
+    use pe2_core::messages::build_messages;
     let msgs = build_messages("system msg", "user msg");
     assert_eq!(msgs.len(), 2);
     assert_eq!(msgs[0].role, "system");

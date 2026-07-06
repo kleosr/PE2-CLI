@@ -1,19 +1,16 @@
-// ============================================================
-// Provider tests  (port of tests/providers.test.js)
-// ============================================================
 
 #[test]
 fn test_provider_kind_from_str() {
     use pe2_providers::client::ProviderKind;
 
-    assert_eq!(ProviderKind::from_str("openai"), Some(ProviderKind::OpenAI));
-    assert_eq!(ProviderKind::from_str("OpenAI"), Some(ProviderKind::OpenAI));
-    assert_eq!(ProviderKind::from_str("OPENAI"), Some(ProviderKind::OpenAI));
-    assert_eq!(ProviderKind::from_str("anthropic"), Some(ProviderKind::Anthropic));
-    assert_eq!(ProviderKind::from_str("google"), Some(ProviderKind::Google));
-    assert_eq!(ProviderKind::from_str("openrouter"), Some(ProviderKind::OpenRouter));
-    assert_eq!(ProviderKind::from_str("ollama"), Some(ProviderKind::Ollama));
-    assert_eq!(ProviderKind::from_str("unknown"), None);
+    assert_eq!(ProviderKind::parse("openai"), Some(ProviderKind::OpenAI));
+    assert_eq!(ProviderKind::parse("OpenAI"), Some(ProviderKind::OpenAI));
+    assert_eq!(ProviderKind::parse("OPENAI"), Some(ProviderKind::OpenAI));
+    assert_eq!(ProviderKind::parse("anthropic"), Some(ProviderKind::Anthropic));
+    assert_eq!(ProviderKind::parse("google"), Some(ProviderKind::Google));
+    assert_eq!(ProviderKind::parse("openrouter"), Some(ProviderKind::OpenRouter));
+    assert_eq!(ProviderKind::parse("ollama"), Some(ProviderKind::Ollama));
+    assert_eq!(ProviderKind::parse("unknown"), None);
 }
 
 #[test]
@@ -75,9 +72,6 @@ fn test_provider_kind_all() {
     assert!(all.contains(&ProviderKind::Ollama));
 }
 
-// ============================================================
-// ProviderConfig tests
-// ============================================================
 
 #[test]
 fn test_provider_config_new() {
@@ -106,15 +100,12 @@ fn test_provider_config_api_key_none() {
     assert!(cfg.api_key().is_none());
 }
 
-// ============================================================
-// Headers tests  (port of tests/providers.test.js header tests)
-// ============================================================
 
 #[test]
 fn test_build_bearer_header() {
     use pe2_providers::headers::build_bearer_header;
 
-    let headers = build_bearer_header("sk-test-key");
+    let headers = build_bearer_header("sk-test-key").unwrap();
     let auth = headers.get("Authorization").unwrap();
     assert_eq!(auth, "Bearer sk-test-key");
 }
@@ -123,27 +114,21 @@ fn test_build_bearer_header() {
 fn test_build_openrouter_headers() {
     use pe2_providers::headers::build_openrouter_headers;
 
-    let headers = build_openrouter_headers("sk-or-key");
-    let auth = headers.get("Authorization").unwrap();
+    let headers = build_openrouter_headers("sk-or-key").unwrap();
+    let auth = headers.get("authorization").unwrap();
     assert_eq!(auth, "Bearer sk-or-key");
-    // OpenRouter specific headers
-    let referer = headers.get("HTTP-Referer");
-    assert!(referer.is_some(), "should have HTTP-Referer header");
+    let referer = headers.get("referer");
+    assert!(referer.is_some(), "should have referer header");
     let title = headers.get("X-Title");
     assert!(title.is_some(), "should have X-Title header");
 }
 
-// ============================================================
-// Factory tests  (port of tests/providers.test.js getProviderClient)
-// ============================================================
 
 #[test]
 fn test_create_client_unsupported_provider_errors() {
-    use pe2_core::errors::CliError;
-    use pe2_providers::client::{ProviderConfig, ProviderKind};
+    use pe2_providers::client::ProviderKind;
 
-    // ProviderKind::from_str returns None for unknown providers
-    let kind = ProviderKind::from_str("unknown-provider");
+    let kind = ProviderKind::parse("unknown-provider");
     assert!(kind.is_none(), "unknown provider should be None");
 }
 
@@ -188,9 +173,6 @@ fn test_create_client_ollama_no_key_needed() {
     assert!(result.is_ok(), "Ollama without key should succeed: {:?}", result.err());
 }
 
-// ============================================================
-// ProviderResponse tests
-// ============================================================
 
 #[test]
 fn test_provider_response_creation() {
@@ -206,9 +188,6 @@ fn test_provider_response_creation() {
     assert_eq!(resp.provider, ProviderKind::OpenAI);
 }
 
-// ============================================================
-// ProviderKind round-trip tests
-// ============================================================
 
 #[test]
 fn test_provider_kind_round_trip() {
@@ -216,7 +195,7 @@ fn test_provider_kind_round_trip() {
 
     for kind in ProviderKind::all() {
         let s = kind.as_str();
-        let back = ProviderKind::from_str(s);
+        let back = ProviderKind::parse(s);
         assert_eq!(back, Some(kind), "round-trip failed for {:?}", kind);
     }
 }

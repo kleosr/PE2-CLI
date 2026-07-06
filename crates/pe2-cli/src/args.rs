@@ -1,60 +1,57 @@
 use clap::Parser;
+use pe2_tui::banner::TAGLINE;
+
+fn long_help() -> &'static str {
+    static HELP: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    HELP.get_or_init(|| {
+        format!(
+            "PE²-CLI: {TAGLINE}\n\n\
+             Takes a rough prompt (text or file), calls a configured LLM,\n\
+             and returns a structured PE²-style prompt with refinement iterations.\n\n\
+             Examples:\n\
+               pe2 \"Write a blog post about AI\"\n\
+               pe2 --config\n\
+               pe2 --provider openai --model gpt-4o-mini \"My prompt\"\n\
+               pe2 -o output.md \"Save to file\""
+        )
+    })
+}
 
 #[derive(Parser, Debug)]
 #[command(
     name = "pe2",
-    version = "4.0.2",
+    version = env!("CARGO_PKG_VERSION"),
     about = "Convert raw prompts to PE²-structured optimized prompts",
-    long_about = r#"PE²-CLI: Structured Prompt Generation v4 — KleoSr Pro Edition
-
-Takes a rough prompt (text or file), calls a configured LLM,
-and returns a structured PE²-style prompt with refinement iterations.
-
-Examples:
-  pe2 "Write a blog post about AI"
-  pe2 --config
-  pe2 prompt.txt --iterations 3
-  pe2 --provider ollama --model llama3.2 "Explain quantum computing"
-"#
+    long_about = long_help()
 )]
 pub struct Args {
-    /// Raw prompt text or path to prompt file (omit for interactive mode)
-    #[arg()]
+    #[arg(help = "Raw prompt text or path to prompt file (omit for interactive mode)")]
     pub prompt: Option<String>,
 
-    /// Open interactive configuration mode
-    #[arg(long)]
+    #[arg(long, help = "Open interactive configuration mode")]
     pub config: bool,
 
-    /// LLM provider (openai, anthropic, google, openrouter, ollama)
-    #[arg(long, short = 'p')]
+    #[arg(long, short = 'p', help = "LLM provider (openai, anthropic, google, openrouter, ollama)")]
     pub provider: Option<String>,
 
-    /// Model identifier for the selected provider
-    #[arg(long, short = 'm')]
+    #[arg(long, short = 'm', help = "Model identifier for the selected provider")]
     pub model: Option<String>,
 
-    /// API key for the provider
-    #[arg(long)]
+    #[arg(long, help = "API key for the provider")]
     pub api_key: Option<String>,
 
-    /// Output file path
-    #[arg(long, short = 'o')]
+    #[arg(long, short = 'o', help = "Output file path")]
     pub output_file: Option<String>,
 
-    /// Number of refinement iterations (overrides auto-detection)
-    #[arg(long, short = 'i')]
+    #[arg(long, short = 'i', help = "Number of refinement iterations (overrides auto-detection)")]
     pub iterations: Option<u32>,
 
-    /// Enable auto-difficulty detection
-    #[arg(long)]
+    #[arg(long, default_value_t = true, help = "Enable auto-difficulty detection")]
     pub auto_difficulty: bool,
 
-    /// Max tokens for LLM response
-    #[arg(long, default_value = "1024")]
+    #[arg(long, default_value = "1024", help = "Max tokens for LLM response")]
     pub max_tokens: u32,
 
-    /// Temperature for LLM sampling
-    #[arg(long, default_value_t = 0.3)]
+    #[arg(long, default_value_t = 0.3, help = "Temperature for LLM sampling")]
     pub temperature: f64,
 }

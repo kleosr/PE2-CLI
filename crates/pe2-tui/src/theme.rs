@@ -14,16 +14,16 @@ pub struct Theme {
 }
 
 pub const PE2_THEME: Theme = Theme {
-    primary: |s| s.bright_cyan().to_colored_string(),
-    secondary: |s| s.bright_magenta().to_colored_string(),
-    success: |s| s.bright_green().to_colored_string(),
-    error: |s| s.bright_red().to_colored_string(),
-    warning: |s| s.bright_yellow().to_colored_string(),
-    muted: |s| s.dimmed().to_colored_string(),
-    highlight: |s| s.bright_white().bold().to_colored_string(),
-    label: |s| s.bright_blue().to_colored_string(),
-    value: |s| s.white().to_colored_string(),
-    border: |s| s.dimmed().to_colored_string(),
+    primary: |s| s.bright_cyan(),
+    secondary: |s| s.bright_magenta(),
+    success: |s| s.bright_green(),
+    error: |s| s.bright_red(),
+    warning: |s| s.bright_yellow(),
+    muted: |s| s.dimmed(),
+    highlight: |s| s.bright_white().bold(),
+    label: |s| s.bright_blue(),
+    value: |s| s.white(),
+    border: |s| s.dimmed(),
 };
 
 pub fn styled_label(label: &str) -> String {
