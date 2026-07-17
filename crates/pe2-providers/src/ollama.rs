@@ -1,7 +1,8 @@
 use async_trait::async_trait;
+use pe2_core::engine::{ChatOptions, EngineLlmProvider};
 use pe2_core::errors::CliError;
-use pe2_core::messages::Message;
-use crate::client::{LlmClient, ProviderConfig, ProviderResponse, ProviderKind};
+use pe2_core::engine::Message;
+use crate::client::ProviderConfig;
 use crate::http::{build_http_client, post_json, validate_base_url};
 
 pub struct OllamaClient {
@@ -23,39 +24,33 @@ impl OllamaClient {
     }
 }
 
-fn extract_content(json: &serde_json::Value, model: &str) -> Result<ProviderResponse, CliError> {
-    let content = json["message"]["content"]
+fn extract_content(json: &serde_json::Value) -> Result<String, CliError> {
+    json["message"]["content"]
         .as_str()
         .ok_or_else(|| CliError::Provider {
             provider: "ollama".to_string(),
             message: "Empty response from model".to_string(),
-        })?
-        .to_string();
-    Ok(ProviderResponse {
-        content,
-        model: json["model"].as_str().unwrap_or(model).to_string(),
-        provider: ProviderKind::Ollama,
-    })
+        })
+        .map(str::to_string)
 }
 
 #[async_trait]
-impl LlmClient for OllamaClient {
+impl EngineLlmProvider for OllamaClient {
     async fn chat(
         &self,
         model: &str,
         messages: &[Message],
-        max_tokens: u32,
-        temperature: f64,
-    ) -> Result<ProviderResponse, CliError> {
+        options: &ChatOptions,
+    ) -> Result<String, CliError> {
         let mut body = serde_json::json!({
             "model": model,
             "messages": messages,
             "stream": false,
         });
-        if max_tokens > 0 {
+        if options.max_tokens > 0 {
             body["options"] = serde_json::json!({
-                "num_predict": max_tokens,
-                "temperature": temperature,
+                "num_predict": options.max_tokens,
+                "temperature": options.temperature,
             });
         }
         let url = format!("{}/api/chat", self.base_url);
@@ -73,6 +68,6 @@ impl LlmClient for OllamaClient {
                 message: format!("HTTP {}", status),
             });
         }
-        extract_content(&json, model)
+        extract_content(&json)
     }
 }

@@ -28,7 +28,7 @@ pub struct Args {
     #[arg(help = "Raw prompt text or path to prompt file (omit for interactive mode)")]
     pub prompt: Option<String>,
 
-    #[arg(long, help = "Open interactive configuration mode")]
+    #[arg(long, help = "Open interactive REPL (same as omitting prompt)")]
     pub config: bool,
 
     #[arg(long, short = 'p', help = "LLM provider (openai, anthropic, google, openrouter, ollama)")]

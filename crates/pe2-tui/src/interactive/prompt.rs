@@ -1,4 +1,3 @@
-use pe2_core::engine::PipelineRunOptions;
 use pe2_core::errors::CliError;
 use pe2_core::validation;
 use crate::display::print_error;
@@ -16,7 +15,7 @@ pub async fn run_prompt_input(state: &mut InteractiveSession, raw_prompt: &str) 
 
     let result = generate_prompt_with_spinner(
         state.config.clone(),
-        PipelineRunOptions::default(),
+        state.pipeline_options.clone(),
         raw_prompt,
     )
     .await?;
@@ -45,7 +44,9 @@ async fn persist_prompt_outcome(
     state.session_store.save().await?;
 
     if state.preferences.track_usage() {
-        state.stats.record_usage(&state.config.provider);
+        state
+            .stats
+            .record_usage(&state.config.provider, Some(result.analysis.score));
         state.stats.save().await?;
     }
 

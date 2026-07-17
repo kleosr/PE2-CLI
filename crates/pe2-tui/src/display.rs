@@ -1,7 +1,7 @@
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use pe2_core::analysis::ComplexityResult;
-use pe2_core::engine::{Metrics, RefinementEntry, StructuredPrompt};
+use pe2_core::engine::{RefinementEntry, StructuredPrompt};
 use pe2_core::errors::CliError;
 use crate::theme::{styled_label, styled_value, PE2_THEME};
 
@@ -76,17 +76,16 @@ pub fn print_refinement_history(history: &[RefinementEntry]) {
     println!();
 }
 
-pub fn print_metrics(metrics: &Metrics) {
+pub fn print_metrics(analysis: &ComplexityResult, iterations: usize) {
     use comfy_table::Table;
     let mut table = Table::new();
     table
         .set_header(vec!["Metric".bold(), "Value".bold()])
-        .add_row(vec!["Accuracy Gain", &metrics.accuracy_gain])
-        .add_row(vec!["Optimization", &metrics.optimization_level])
-        .add_row(vec!["Quality Score", &metrics.quality_score])
-        .add_row(vec!["Iterations", &metrics.iterations_applied.to_string()]);
+        .add_row(vec!["Difficulty", analysis.difficulty.as_str()])
+        .add_row(vec!["Complexity Score", &analysis.score.to_string()])
+        .add_row(vec!["Iterations", &iterations.to_string()]);
 
-    println!("  {}", (PE2_THEME.highlight)("Performance Metrics".to_string()));
+    println!("  {}", (PE2_THEME.highlight)("Run Metrics".to_string()));
     for line in table.to_string().lines() {
         println!(
             "  {} {}",

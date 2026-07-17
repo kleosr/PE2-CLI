@@ -13,21 +13,13 @@ pub fn render_complexity_preflight(analysis: &ComplexityResult, provider: &str, 
     print_info(&format!("Using {provider} / {model}"));
 }
 
-pub async fn generate_prompt(
-    cfg: Config,
-    options: PipelineRunOptions,
-    raw_prompt: &str,
-) -> Result<PipelineResult, CliError> {
-    run_pipeline(cfg, options, raw_prompt).await
-}
-
 pub async fn generate_prompt_with_spinner(
     cfg: Config,
     options: PipelineRunOptions,
     raw_prompt: &str,
 ) -> Result<PipelineResult, CliError> {
     let spinner = create_spinner("Generating prompt...")?;
-    let result = generate_prompt(cfg, options, raw_prompt).await?;
+    let result = run_pipeline(cfg, options, raw_prompt).await?;
     spinner.finish_and_clear();
     Ok(result)
 }
@@ -36,5 +28,5 @@ pub fn render_generation_result(result: &PipelineResult) {
     print_success("Prompt generation complete!");
     print_prompt_result(&result.prompt, &result.output_file);
     print_refinement_history(&result.history);
-    print_metrics(&result.metrics);
+    print_metrics(&result.analysis, result.history.len());
 }

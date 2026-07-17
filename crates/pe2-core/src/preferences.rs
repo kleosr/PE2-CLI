@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
 use std::path::PathBuf;
 use crate::config::preferences_file_path;
-use crate::constants;
-use crate::errors::CliError;
 use crate::json_store::JsonStore;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,7 +8,6 @@ pub struct UserPrefs {
     pub theme: String,
     pub compact: bool,
     pub track_usage: bool,
-    pub last_used_commands: VecDeque<String>,
 }
 
 impl Default for UserPrefs {
@@ -20,7 +16,6 @@ impl Default for UserPrefs {
             theme: "default".to_string(),
             compact: false,
             track_usage: true,
-            last_used_commands: VecDeque::with_capacity(constants::MAX_LAST_USED_COMMANDS),
         }
     }
 }
@@ -66,27 +61,6 @@ impl UserPreferences {
     pub fn set_track_usage(&mut self, track: bool) {
         self.store.snapshot_mut().track_usage = track;
         self.store.persist_best_effort();
-    }
-
-    pub fn track_command(&mut self, command: &str) {
-        let prefs = self.store.snapshot_mut();
-        if prefs.last_used_commands.len() >= constants::MAX_LAST_USED_COMMANDS {
-            prefs.last_used_commands.pop_front();
-        }
-        prefs.last_used_commands.push_back(command.to_string());
-        self.store.persist_best_effort();
-    }
-
-    pub fn last_used_commands(&self) -> impl Iterator<Item = &str> {
-        self.store
-            .snapshot()
-            .last_used_commands
-            .iter()
-            .map(|s| s.as_str())
-    }
-
-    pub fn force_save(&self) -> Result<(), CliError> {
-        self.store.persist()
     }
 }
 

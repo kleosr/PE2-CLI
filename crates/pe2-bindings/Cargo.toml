@@ -18,4 +18,4 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 
 [build-dependencies]
-napi-build = "2"
+napi-build = "=2.1.3"

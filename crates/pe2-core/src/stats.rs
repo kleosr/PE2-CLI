@@ -32,30 +32,20 @@ impl StatsTracker {
         }
     }
 
-    pub fn record_usage(&mut self, provider: &str) {
+    pub fn record_usage(&mut self, provider: &str, complexity_score: Option<u32>) {
         let stats = self.store.snapshot_mut();
         stats.total_prompts += 1;
+        if let Some(score) = complexity_score {
+            let n = stats.total_prompts as f64;
+            stats.running_avg_complexity = if n > 1.0 {
+                ((n - 1.0) / n) * stats.running_avg_complexity + (1.0 / n) * score as f64
+            } else {
+                score as f64
+            };
+        }
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         *stats.daily_usage.entry(today).or_insert(0) += 1;
         *stats.provider_usage.entry(provider.to_string()).or_insert(0) += 1;
-        stats.last_updated = chrono::Utc::now().to_rfc3339();
-        prune_daily_usage(stats);
-        self.store.persist_best_effort();
-    }
-
-    pub fn track(&mut self, model: &str, complexity_score: u32) {
-        let stats = self.store.snapshot_mut();
-        stats.total_prompts += 1;
-        let n = stats.total_prompts as f64;
-        stats.running_avg_complexity = if n > 1.0 {
-            ((n - 1.0) / n) * stats.running_avg_complexity + (1.0 / n) * complexity_score as f64
-        } else {
-            complexity_score as f64
-        };
-
-        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-        *stats.daily_usage.entry(today).or_insert(0) += 1;
-        *stats.provider_usage.entry(model.to_string()).or_insert(0) += 1;
         stats.last_updated = chrono::Utc::now().to_rfc3339();
         prune_daily_usage(stats);
         self.store.persist_best_effort();
@@ -95,19 +85,19 @@ mod tests {
     fn record_usage_tracks_provider_and_daily() {
         let dir = tempfile::TempDir::new().unwrap();
         let mut st = StatsTracker::from_path(dir.path().join("stats.json"));
-        st.record_usage("openrouter");
+        st.record_usage("openrouter", None);
         assert_eq!(st.usage().total_prompts, 1);
         assert_eq!(st.usage().provider_usage.get("openrouter"), Some(&1));
         assert_eq!(st.usage().daily_usage.len(), 1);
     }
 
     #[test]
-    fn record_usage_accumulates_same_provider() {
+    fn record_usage_updates_complexity_average() {
         let dir = tempfile::TempDir::new().unwrap();
         let mut st = StatsTracker::from_path(dir.path().join("stats.json"));
-        st.record_usage("openai");
-        st.record_usage("openai");
+        st.record_usage("openai", Some(10));
+        st.record_usage("openai", Some(20));
         assert_eq!(st.usage().total_prompts, 2);
-        assert_eq!(st.usage().provider_usage.get("openai"), Some(&2));
+        assert!((st.usage().running_avg_complexity - 15.0).abs() < f64::EPSILON);
     }
 }

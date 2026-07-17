@@ -25,18 +25,6 @@ pub fn resolve_slash_command(input: &str) -> Option<SlashCommand> {
     }
 }
 
-pub fn slash_command_token(input: &str) -> Option<&str> {
-    let token = input.split_whitespace().next()?;
-    if !token.starts_with('/') {
-        return None;
-    }
-    if resolve_slash_command(input).is_some() {
-        Some(token)
-    } else {
-        None
-    }
-}
-
 pub fn validate_prompt(prompt: &str) -> Option<String> {
     let trimmed = prompt.trim();
     if trimmed.is_empty() {
@@ -88,6 +76,12 @@ impl CommandValidation {
 
 pub fn unknown_command_message(validation: &CommandValidation) -> Option<String> {
     match validation {
+        CommandValidation::Unknown {
+            command,
+            suggestion: Some(hint),
+        } => Some(format!(
+            "Unknown command: {command}. Did you mean {hint}? Type /help for available commands."
+        )),
         CommandValidation::Unknown { command, .. } => Some(format!(
             "Unknown command: {command}. Type /help for available commands."
         )),
@@ -96,7 +90,11 @@ pub fn unknown_command_message(validation: &CommandValidation) -> Option<String>
 }
 
 pub fn validate_and_suggest_command(command: &str) -> CommandValidation {
-    if !command.split_whitespace().next().is_some_and(|t| t.starts_with('/')) {
+    if !command
+        .split_whitespace()
+        .next()
+        .is_some_and(|t| t.starts_with('/'))
+    {
         return CommandValidation::NotCommand;
     }
 
@@ -112,7 +110,10 @@ pub fn validate_and_suggest_command(command: &str) -> CommandValidation {
         .min_by_key(|known| str_similarity(&cmd, known))
         .copied();
 
-    CommandValidation::Unknown { command: cmd, suggestion }
+    CommandValidation::Unknown {
+        command: cmd,
+        suggestion,
+    }
 }
 
 fn known_slash_tokens() -> &'static [&'static str] {
@@ -127,10 +128,6 @@ fn str_similarity(a: &str, b: &str) -> usize {
         return a.len().abs_diff(b.len()) + 5;
     }
     a.chars().zip(b.chars()).filter(|(x, y)| x != y).count()
-}
-
-pub fn parse_slash_command(input: &str) -> Option<&str> {
-    slash_command_token(input)
 }
 
 #[cfg(test)]
@@ -162,7 +159,10 @@ mod tests {
 
     #[test]
     fn test_command_validation() {
-        assert_eq!(validate_and_suggest_command("/help"), CommandValidation::Valid);
+        assert_eq!(
+            validate_and_suggest_command("/help"),
+            CommandValidation::Valid
+        );
     }
 
     #[test]

@@ -1,4 +1,3 @@
-pub mod adapter;
 pub mod client;
 pub mod factory;
 pub mod http;

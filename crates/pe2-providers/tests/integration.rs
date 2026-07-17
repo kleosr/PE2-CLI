@@ -14,11 +14,11 @@ fn test_provider_kind_from_str() {
 }
 
 #[test]
-fn test_provider_kind_from_str_result() {
+fn test_provider_kind_parse_result() {
     use pe2_providers::client::ProviderKind;
 
-    assert!(ProviderKind::from_str_result("openai").is_ok());
-    assert!(ProviderKind::from_str_result("unknown").is_err());
+    assert!("openai".parse::<ProviderKind>().is_ok());
+    assert!("unknown".parse::<ProviderKind>().is_err());
 }
 
 #[test]
@@ -30,15 +30,6 @@ fn test_provider_kind_as_str() {
     assert_eq!(ProviderKind::Google.as_str(), "google");
     assert_eq!(ProviderKind::OpenRouter.as_str(), "openrouter");
     assert_eq!(ProviderKind::Ollama.as_str(), "ollama");
-}
-
-#[test]
-fn test_provider_kind_display_name() {
-    use pe2_providers::client::ProviderKind;
-
-    assert!(ProviderKind::OpenAI.display_name().contains("OpenAI"));
-    assert!(ProviderKind::Anthropic.display_name().contains("Claude"));
-    assert!(ProviderKind::Ollama.display_name().contains("Local"));
 }
 
 #[test]
@@ -167,7 +158,6 @@ fn test_create_client_ollama_no_key_needed() {
     use pe2_providers::client::{ProviderConfig, ProviderKind};
     use pe2_providers::factory::create_client;
 
-    // Ollama doesn't need an API key
     let cfg = ProviderConfig::new(ProviderKind::Ollama, None);
     let result = create_client(&cfg);
     assert!(result.is_ok(), "Ollama without key should succeed: {:?}", result.err());
@@ -175,19 +165,13 @@ fn test_create_client_ollama_no_key_needed() {
 
 
 #[test]
-fn test_provider_response_creation() {
-    use pe2_providers::client::{ProviderKind, ProviderResponse};
+fn test_build_anthropic_headers() {
+    use pe2_providers::headers::build_anthropic_headers;
 
-    let resp = ProviderResponse {
-        content: "Hello".to_string(),
-        model: "gpt-4o".to_string(),
-        provider: ProviderKind::OpenAI,
-    };
-    assert_eq!(resp.content, "Hello");
-    assert_eq!(resp.model, "gpt-4o");
-    assert_eq!(resp.provider, ProviderKind::OpenAI);
+    let headers = build_anthropic_headers("sk-ant-key").unwrap();
+    assert_eq!(headers.get("x-api-key").unwrap(), "sk-ant-key");
+    assert!(headers.get("anthropic-version").is_some());
 }
-
 
 #[test]
 fn test_provider_kind_round_trip() {

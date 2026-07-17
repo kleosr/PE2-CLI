@@ -12,7 +12,6 @@ path = "src/main.rs"
 
 [dependencies]
 pe2-core = { path = "../pe2-core" }
-pe2-providers = { path = "../pe2-providers" }
 pe2-tui = { path = "../pe2-tui" }
 clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true }

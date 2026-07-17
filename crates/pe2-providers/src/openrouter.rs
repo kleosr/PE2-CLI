@@ -1,7 +1,8 @@
 use async_trait::async_trait;
+use pe2_core::engine::{ChatOptions, EngineLlmProvider};
 use pe2_core::errors::CliError;
-use pe2_core::messages::Message;
-use crate::client::{LlmClient, ProviderConfig, ProviderResponse, ProviderKind};
+use pe2_core::engine::Message;
+use crate::client::ProviderConfig;
 use crate::headers::build_openrouter_headers;
 use crate::http::{build_http_client, check_success, post_json};
 
@@ -22,36 +23,30 @@ impl OpenRouterClient {
     }
 }
 
-fn extract_content(json: &serde_json::Value, model: &str) -> Result<ProviderResponse, CliError> {
-    let content = json["choices"][0]["message"]["content"]
+fn extract_content(json: &serde_json::Value) -> Result<String, CliError> {
+    json["choices"][0]["message"]["content"]
         .as_str()
         .ok_or_else(|| CliError::Provider {
             provider: "openrouter".to_string(),
             message: "Empty response from model".to_string(),
-        })?
-        .to_string();
-    Ok(ProviderResponse {
-        content,
-        model: model.to_string(),
-        provider: ProviderKind::OpenRouter,
-    })
+        })
+        .map(str::to_string)
 }
 
 #[async_trait]
-impl LlmClient for OpenRouterClient {
+impl EngineLlmProvider for OpenRouterClient {
     async fn chat(
         &self,
         model: &str,
         messages: &[Message],
-        max_tokens: u32,
-        temperature: f64,
-    ) -> Result<ProviderResponse, CliError> {
+        options: &ChatOptions,
+    ) -> Result<String, CliError> {
         let headers = build_openrouter_headers(&self.api_key)?;
         let body = serde_json::json!({
             "model": model,
             "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
+            "max_tokens": options.max_tokens,
+            "temperature": options.temperature,
         });
         let (status, json) = post_json(
             &self.client,
@@ -62,6 +57,6 @@ impl LlmClient for OpenRouterClient {
         )
         .await?;
         check_success(status, &json, "openrouter")?;
-        extract_content(&json, model)
+        extract_content(&json)
     }
 }

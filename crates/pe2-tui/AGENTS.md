@@ -3,39 +3,23 @@
 **Parent:** `AGENTS.md`
 **Scope:** `crates/pe2-tui/`
 
-**5 modules, ~460 LOC** — banner, spinners, themed display, interactive REPL.
+Banner, display, `prompt_flow`, interactive REPL. Generation via `pe2_providers::runner::run_pipeline`.
 
 ## Where To Look
 
 | Module | File | Role |
 |--------|------|------|
-| Interactive | `src/interactive.rs` (266L) | REPL: readline, `/commands`, provider+pipeline dispatch |
-| Display | `src/display.rs` (127L) | Themed output, spinners, metrics |
-| Banner | `src/banner.rs` (31L) | ASCII welcome screen |
-| Theme | `src/theme.rs` (31L) | Color scheme constants |
-| Lib | `src/lib.rs` (4L) | Re-exports |
+| Prompt flow | `src/prompt_flow.rs` | Spinner + `run_pipeline` |
+| Interactive | `src/interactive/` | REPL; takes `PipelineRunOptions` from CLI |
+| Display | `src/display.rs` | Themed output / metrics |
 
-## Key Details
+## Notes
 
-- **crossterm** for terminal control; **indicatif** spinner during LLM calls
-- `/help`, `/config`, `/session`, `/prefs`, `/stats`, `/clear` slash commands
-- Creates provider via `pe2_providers::factory::create_client`, runs `pe2_core::engine::Pipeline` directly
-
-## Conventions (delta)
-
-- Depends on `pe2-providers` directly (skips `pe2-cli`) — presentation layer owns HTTP client creation
-- `display.rs` imports `pe2_core::analysis` and `engine` types for formatted output
-
-## Anti-Patterns
-
-- **`interactive.rs` god module** — I/O, config, client creation, pipeline in 266 lines
-- **Tight coupling** to `pe2-core` internals and `pe2-providers` factory
-- **No tests**
+- Unknown `/…` input uses `validate_and_suggest_command`
+- Session API keys are in-memory only (`config.json` does not serialize `api_key`)
 
 ## Tests
 
 ```bash
-# Manual only — no crate tests:
-cargo run --           # interactive mode
-cargo run -- "test"    # single-shot via pe2-cli
+cargo test -p pe2-tui
 ```

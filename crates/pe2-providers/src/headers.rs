@@ -36,3 +36,18 @@ pub fn build_bearer_header(api_key: &str) -> Result<HeaderMap, CliError> {
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     Ok(headers)
 }
+
+pub fn build_anthropic_headers(api_key: &str) -> Result<HeaderMap, CliError> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "x-api-key",
+        HeaderValue::from_str(api_key)
+            .map_err(|_| CliError::Auth("Invalid Anthropic API key format".to_string()))?,
+    );
+    headers.insert(
+        "anthropic-version",
+        HeaderValue::from_static("2023-06-01"),
+    );
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    Ok(headers)
+}

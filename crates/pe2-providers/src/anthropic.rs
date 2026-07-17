@@ -1,7 +1,9 @@
 use async_trait::async_trait;
+use pe2_core::engine::{ChatOptions, EngineLlmProvider};
 use pe2_core::errors::CliError;
-use pe2_core::messages::Message;
-use crate::client::{LlmClient, ProviderConfig, ProviderResponse, ProviderKind};
+use pe2_core::engine::Message;
+use crate::client::ProviderConfig;
+use crate::headers::build_anthropic_headers;
 use crate::http::{build_http_client, check_success, post_json};
 
 pub struct AnthropicClient {
@@ -37,18 +39,13 @@ fn extract_system(messages: &[Message]) -> (Option<String>, Vec<serde_json::Valu
     (system, msgs)
 }
 
-fn build_body(
-    model: &str,
-    messages: &[Message],
-    max_tokens: u32,
-    temperature: f64,
-) -> serde_json::Value {
+fn build_body(model: &str, messages: &[Message], options: &ChatOptions) -> serde_json::Value {
     let (system_text, anthropic_messages) = extract_system(messages);
     let mut body = serde_json::json!({
         "model": model,
         "messages": anthropic_messages,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
+        "max_tokens": options.max_tokens,
+        "temperature": options.temperature,
     });
     if let Some(sys) = system_text {
         body["system"] = serde_json::Value::String(sys);
@@ -56,45 +53,28 @@ fn build_body(
     body
 }
 
-fn extract_content(json: &serde_json::Value, model: &str) -> Result<ProviderResponse, CliError> {
-    let content = json["content"]
+fn extract_content(json: &serde_json::Value) -> Result<String, CliError> {
+    json["content"]
         .as_array()
         .and_then(|arr| arr.first())
         .and_then(|block| block["text"].as_str())
         .ok_or_else(|| CliError::Provider {
             provider: "anthropic".to_string(),
             message: "Empty response from model".to_string(),
-        })?
-        .to_string();
-    Ok(ProviderResponse {
-        content,
-        model: model.to_string(),
-        provider: ProviderKind::Anthropic,
-    })
+        })
+        .map(str::to_string)
 }
 
 #[async_trait]
-impl LlmClient for AnthropicClient {
+impl EngineLlmProvider for AnthropicClient {
     async fn chat(
         &self,
         model: &str,
         messages: &[Message],
-        max_tokens: u32,
-        temperature: f64,
-    ) -> Result<ProviderResponse, CliError> {
-        let body = build_body(model, messages, max_tokens, temperature);
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert("x-api-key", self.api_key.parse().map_err(|_| {
-            CliError::Auth("Invalid Anthropic API key format".to_string())
-        })?);
-        headers.insert(
-            "anthropic-version",
-            reqwest::header::HeaderValue::from_static("2023-06-01"),
-        );
-        headers.insert(
-            reqwest::header::CONTENT_TYPE,
-            reqwest::header::HeaderValue::from_static("application/json"),
-        );
+        options: &ChatOptions,
+    ) -> Result<String, CliError> {
+        let body = build_body(model, messages, options);
+        let headers = build_anthropic_headers(&self.api_key)?;
         let (status, json) = post_json(
             &self.client,
             "https://api.anthropic.com/v1/messages",
@@ -104,6 +84,6 @@ impl LlmClient for AnthropicClient {
         )
         .await?;
         check_success(status, &json, "anthropic")?;
-        extract_content(&json, model)
+        extract_content(&json)
     }
 }
