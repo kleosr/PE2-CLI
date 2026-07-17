@@ -1,7 +1,8 @@
 use async_trait::async_trait;
+use pe2_core::engine::{ChatOptions, EngineLlmProvider};
 use pe2_core::errors::CliError;
-use pe2_core::messages::Message;
-use crate::client::{LlmClient, ProviderConfig, ProviderResponse, ProviderKind};
+use pe2_core::engine::Message;
+use crate::client::ProviderConfig;
 use crate::headers::build_bearer_header;
 use crate::http::{build_http_client, check_success, post_json, validate_base_url};
 
@@ -29,40 +30,34 @@ impl OpenAIClient {
     }
 }
 
-fn extract_content(json: &serde_json::Value, model: &str) -> Result<ProviderResponse, CliError> {
-    let content = json["choices"][0]["message"]["content"]
+fn extract_content(json: &serde_json::Value) -> Result<String, CliError> {
+    json["choices"][0]["message"]["content"]
         .as_str()
         .ok_or_else(|| CliError::Provider {
             provider: "openai".to_string(),
             message: "Empty response from model".to_string(),
-        })?
-        .to_string();
-    Ok(ProviderResponse {
-        content,
-        model: json["model"].as_str().unwrap_or(model).to_string(),
-        provider: ProviderKind::OpenAI,
-    })
+        })
+        .map(str::to_string)
 }
 
 #[async_trait]
-impl LlmClient for OpenAIClient {
+impl EngineLlmProvider for OpenAIClient {
     async fn chat(
         &self,
         model: &str,
         messages: &[Message],
-        max_tokens: u32,
-        temperature: f64,
-    ) -> Result<ProviderResponse, CliError> {
+        options: &ChatOptions,
+    ) -> Result<String, CliError> {
         let headers = build_bearer_header(&self.api_key)?;
         let body = serde_json::json!({
             "model": model,
             "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
+            "max_tokens": options.max_tokens,
+            "temperature": options.temperature,
         });
         let url = format!("{}/chat/completions", self.base_url);
         let (status, json) = post_json(&self.client, &url, headers, &body, "openai").await?;
         check_success(status, &json, "openai")?;
-        extract_content(&json, model)
+        extract_content(&json)
     }
 }

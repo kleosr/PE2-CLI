@@ -2,16 +2,70 @@ use crate::analysis::{self, ComplexityResult};
 use crate::config::Config;
 use crate::constants;
 use crate::errors::CliError;
-use crate::messages::{self, Message};
-use crate::paths;
 use crate::templates;
 use crate::validation;
 use crate::write_atomic;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::path::{Component, Path, PathBuf};
 
 const FIELD_VALIDATION_EDITS: &str = "Prompt generation with field validation.";
 const AUTO_STRUCTURING_EDITS: &str = "Prompt generation with automatic structuring.";
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Message {
+    pub role: String,
+    pub content: String,
+}
+
+pub fn build_messages(system_content: &str, user_content: &str) -> Vec<Message> {
+    vec![
+        Message {
+            role: "system".to_string(),
+            content: system_content.to_string(),
+        },
+        Message {
+            role: "user".to_string(),
+            content: user_content.to_string(),
+        },
+    ]
+}
+
+fn local_prompts_dir() -> PathBuf {
+    std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("pe2-prompts")
+}
+
+fn rejects_traversal(path: &Path) -> bool {
+    path.components()
+        .any(|c| matches!(c, Component::ParentDir))
+}
+
+pub fn resolve_output_file(
+    output_file: Option<&str>,
+    session_id: &str,
+) -> Result<PathBuf, std::io::Error> {
+    if let Some(file) = output_file {
+        let path = if PathBuf::from(file).is_absolute() {
+            PathBuf::from(file)
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(file)
+        };
+        if rejects_traversal(&path) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "output path must not contain '..'",
+            ));
+        }
+        return Ok(path);
+    }
+    let dir = local_prompts_dir();
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir.join(format!("pe2-session-{}.md", session_id)))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructuredPrompt {
@@ -120,14 +174,19 @@ impl Default for StructuredPrompt {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ChatOptions {
+    pub max_tokens: u32,
+    pub temperature: f64,
+}
+
 #[async_trait]
 pub trait EngineLlmProvider: Send + Sync {
     async fn chat(
         &self,
         model: &str,
         messages: &[Message],
-        max_tokens: u32,
-        temperature: f64,
+        options: &ChatOptions,
     ) -> Result<String, CliError>;
 }
 
@@ -137,24 +196,9 @@ pub struct RefinementEntry {
     pub edits: String,
 }
 
-#[derive(Debug, Clone)]
-pub struct Metrics {
-    pub accuracy_gain: String,
-    pub optimization_level: String,
-    pub quality_score: String,
-    pub iterations_applied: usize,
-}
-
-impl Metrics {
-    pub fn new(complexity_score: u32, strategy_focus: &str, history_len: usize) -> Self {
-        let gain = constants::DEFAULT_QUALITY_SCORE as u32 + complexity_score * 3;
-        Self {
-            accuracy_gain: format!("Estimated {}% improvement", gain),
-            optimization_level: strategy_focus.to_string(),
-            quality_score: format!("{:.1}", constants::DEFAULT_QUALITY_SCORE),
-            iterations_applied: history_len,
-        }
-    }
+struct PromptTurn {
+    prompt: StructuredPrompt,
+    edits: String,
 }
 
 pub struct Pipeline {
@@ -166,7 +210,7 @@ pub struct Pipeline {
     refinement_note: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct PipelineRunOptions {
     pub iterations_override: Option<u32>,
     pub max_tokens: u32,
@@ -211,7 +255,7 @@ impl Pipeline {
         let analysis = analysis::analyze_prompt_complexity(raw_prompt);
         let iterations = self.resolve_iterations(&analysis);
         self.run_refinements(raw_prompt, iterations).await?;
-        self.write_result(raw_prompt, &analysis).await
+        self.write_result(&analysis).await
     }
 
     fn resolve_iterations(&self, analysis: &ComplexityResult) -> usize {
@@ -248,22 +292,17 @@ impl Pipeline {
         Ok(())
     }
 
-    async fn write_result(
-        &self,
-        _raw_prompt: &str,
-        analysis: &ComplexityResult,
-    ) -> Result<PipelineResult, CliError> {
+    async fn write_result(&self, analysis: &ComplexityResult) -> Result<PipelineResult, CliError> {
         let prompt = self
             .current_prompt
             .as_ref()
             .ok_or_else(|| CliError::Runtime("No prompt generated".to_string()))?;
 
-        let output_file = paths::resolve_output_file(
+        let output_file = resolve_output_file(
             self.config.output_file.as_deref(),
             &uuid::Uuid::new_v4().to_string()[..8],
         )?;
 
-        let metrics = Metrics::new(analysis.score, "optimization", self.history.len());
         let markdown = templates::format_markdown_output(
             &prompt.to_json_pretty()?,
             &self
@@ -271,14 +310,8 @@ impl Pipeline {
                 .iter()
                 .map(|h| (h.iteration, h.edits.clone()))
                 .collect::<Vec<_>>(),
-            &templates::MarkdownMetrics {
-                accuracy: &metrics.accuracy_gain,
-                optimization: &metrics.optimization_level,
-                quality: &metrics.quality_score,
-                iterations: metrics.iterations_applied,
-                difficulty: analysis.difficulty.as_str(),
-                complexity_score: analysis.score,
-            },
+            analysis,
+            self.history.len(),
         );
 
         write_atomic::write_text_atomic(&output_file, &markdown)?;
@@ -286,44 +319,39 @@ impl Pipeline {
         Ok(PipelineResult {
             prompt: prompt.clone(),
             output_file: output_file.to_string_lossy().to_string(),
-            metrics,
             analysis: analysis.clone(),
             history: self.history.clone(),
             refinement_note: self.refinement_note.clone(),
         })
     }
 
-    async fn generate_initial(&self, raw_prompt: &str) -> Result<PromptResponse, CliError> {
+    async fn generate_initial(&self, raw_prompt: &str) -> Result<PromptTurn, CliError> {
         let template = templates::get_initial_template(raw_prompt);
-        let messages = messages::build_messages(constants::LLM_SYSTEM_MESSAGE, &template);
-        let content = self
-            .call_provider(&messages)
-            .await?;
+        let messages = build_messages(constants::LLM_SYSTEM_MESSAGE, &template);
+        let content = self.call_provider(&messages).await?;
         self.parse_provider_content(&content, raw_prompt)
     }
 
-    async fn refine(&self, iteration_num: u32) -> Result<PromptResponse, CliError> {
+    async fn refine(&self, iteration_num: u32) -> Result<PromptTurn, CliError> {
         let current = self
             .current_prompt
             .as_ref()
             .ok_or_else(|| CliError::Runtime("No prompt to refine".to_string()))?;
         let json = current.to_json_pretty()?;
         let template = templates::get_refinement_template(&json, iteration_num);
-        let messages =
-            messages::build_messages(constants::LLM_REFINEMENT_SYSTEM_MESSAGE, &template);
+        let messages = build_messages(constants::LLM_REFINEMENT_SYSTEM_MESSAGE, &template);
         let content = self.call_provider(&messages).await?;
         self.parse_provider_content(&content, &json)
     }
 
     async fn call_provider(&self, messages: &[Message]) -> Result<String, CliError> {
+        let chat_opts = ChatOptions {
+            max_tokens: self.options.max_tokens,
+            temperature: self.options.temperature,
+        };
         let content = self
             .provider
-            .chat(
-                &self.config.model,
-                messages,
-                self.options.max_tokens,
-                self.options.temperature,
-            )
+            .chat(&self.config.model, messages, &chat_opts)
             .await?;
         if content.trim().is_empty() {
             return Err(CliError::Provider {
@@ -334,28 +362,58 @@ impl Pipeline {
         Ok(content)
     }
 
-    fn parse_provider_content(
-        &self,
-        content: &str,
-        raw_prompt: &str,
-    ) -> Result<PromptResponse, CliError> {
+    fn parse_provider_content(&self, content: &str, raw_prompt: &str) -> Result<PromptTurn, CliError> {
         let (prompt, edits) = StructuredPrompt::from_llm_response(content, raw_prompt)?;
-        Ok(PromptResponse { prompt, edits })
+        Ok(PromptTurn { prompt, edits })
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct PromptResponse {
-    pub prompt: StructuredPrompt,
-    pub edits: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct PipelineResult {
     pub prompt: StructuredPrompt,
     pub output_file: String,
-    pub metrics: Metrics,
     pub analysis: ComplexityResult,
     pub history: Vec<RefinementEntry>,
     pub refinement_note: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_llm_response_parses_valid_json() {
+        let json = r#"{
+            "context": "c",
+            "role": "r",
+            "task": "t",
+            "constraints": "x",
+            "output": "o"
+        }"#;
+        let (prompt, _) = StructuredPrompt::from_llm_response(json, "raw").unwrap();
+        assert_eq!(prompt.context, "c");
+        assert_eq!(prompt.role, "r");
+    }
+
+    #[test]
+    fn from_llm_response_falls_back_on_garbage() {
+        let (prompt, edits) =
+            StructuredPrompt::from_llm_response("not json", "do the thing").unwrap();
+        assert!(prompt.context.contains("do the thing"));
+        assert!(edits.contains("automatic"));
+    }
+
+    #[test]
+    fn rejects_parent_dir_in_output_file() {
+        let err = resolve_output_file(Some("../escape.md"), "abc").unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn build_messages_has_system_and_user() {
+        let msgs = build_messages("sys", "user");
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0].role, "system");
+        assert_eq!(msgs[1].role, "user");
+    }
 }

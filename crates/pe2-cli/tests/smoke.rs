@@ -30,6 +30,13 @@ fn pipeline_validation_rejects_short_prompt() {
 
 #[test]
 fn slash_commands_parse_known_aliases() {
-    assert_eq!(validation::parse_slash_command("/c"), Some("/c"));
-    assert_eq!(validation::parse_slash_command("/stats"), Some("/stats"));
+    use pe2_core::validation::SlashCommand;
+    assert_eq!(
+        validation::resolve_slash_command("/c"),
+        Some(SlashCommand::Config)
+    );
+    assert_eq!(
+        validation::resolve_slash_command("/stats"),
+        Some(SlashCommand::Stats)
+    );
 }
