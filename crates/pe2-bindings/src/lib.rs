@@ -78,18 +78,13 @@ fn serialize_pipeline_result(result: &pe2_core::engine::PipelineResult) -> Strin
             "output": result.prompt.output,
         },
         "output_file": result.output_file,
-        "metrics": {
-            "accuracy_gain": result.metrics.accuracy_gain,
-            "optimization_level": result.metrics.optimization_level,
-            "quality_score": result.metrics.quality_score,
-            "iterations_applied": result.metrics.iterations_applied,
-        },
         "analysis": {
             "score": result.analysis.score,
             "difficulty": result.analysis.difficulty.as_str(),
             "iterations": result.analysis.iterations,
             "word_count": result.analysis.word_count,
         },
+        "iterations_applied": result.history.len(),
         "refinement_note": result.refinement_note,
     })
     .to_string()
@@ -102,7 +97,8 @@ pub fn validate_prompt(prompt: String) -> Option<String> {
 
 #[napi]
 pub fn parse_slash_command(input: String) -> Option<String> {
-    validation::parse_slash_command(&input).map(|s| s.to_string())
+    validation::resolve_slash_command(&input)?;
+    input.split_whitespace().next().map(str::to_string)
 }
 
 fn cli_error_code(err: &CliError) -> &'static str {
@@ -115,7 +111,6 @@ fn cli_error_code(err: &CliError) -> &'static str {
         CliError::Runtime(_) => "RUNTIME_ERROR",
         CliError::Json(_) => "JSON_ERROR",
         CliError::Io(_) => "IO_ERROR",
-        CliError::General(_) => "GENERAL_ERROR",
         CliError::Other(_) => "UNKNOWN_ERROR",
     }
 }

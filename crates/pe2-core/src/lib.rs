@@ -1,10 +1,8 @@
 pub mod constants;
 pub mod errors;
 pub mod config;
-pub mod paths;
 pub mod analysis;
 pub mod templates;
-pub mod messages;
 pub mod validation;
 pub mod session;
 pub mod stats;
@@ -12,4 +10,3 @@ pub mod preferences;
 pub mod write_atomic;
 pub mod engine;
 pub mod json_store;
-pub mod api_key;

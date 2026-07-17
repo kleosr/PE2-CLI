@@ -39,11 +39,15 @@ async fn run(args: Args) -> anyhow::Result<()> {
         .init();
 
     if args.config {
-        return setup_and_run_interactive().await.map_err(Into::into);
+        return setup_and_run_interactive(pipeline_options(&args))
+            .await
+            .map_err(Into::into);
     }
 
     let Some(prompt_arg) = args.prompt.as_ref() else {
-        return setup_and_run_interactive().await.map_err(Into::into);
+        return setup_and_run_interactive(pipeline_options(&args))
+            .await
+            .map_err(Into::into);
     };
     let prompt = load_prompt_text(prompt_arg)?;
     run_single_prompt(&args, &prompt).await

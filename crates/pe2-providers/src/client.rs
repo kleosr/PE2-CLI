@@ -1,6 +1,4 @@
-use async_trait::async_trait;
 use pe2_core::errors::CliError;
-use pe2_core::messages::Message;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -13,10 +11,6 @@ pub enum ProviderKind {
 }
 
 impl ProviderKind {
-    pub fn from_str_result(s: &str) -> Result<Self, CliError> {
-        s.parse()
-    }
-
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "openai" => Some(ProviderKind::OpenAI),
@@ -35,16 +29,6 @@ impl ProviderKind {
             ProviderKind::Google => "google",
             ProviderKind::OpenRouter => "openrouter",
             ProviderKind::Ollama => "ollama",
-        }
-    }
-
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            ProviderKind::OpenAI => "OpenAI",
-            ProviderKind::Anthropic => "Anthropic (Claude)",
-            ProviderKind::Google => "Google (Gemini)",
-            ProviderKind::OpenRouter => "OpenRouter (Multi-Provider)",
-            ProviderKind::Ollama => "Ollama (Local)",
         }
     }
 
@@ -99,22 +83,4 @@ impl ProviderConfig {
     pub fn api_key(&self) -> Option<&str> {
         self.api_key.as_deref()
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProviderResponse {
-    pub content: String,
-    pub model: String,
-    pub provider: ProviderKind,
-}
-
-#[async_trait]
-pub trait LlmClient: Send + Sync {
-    async fn chat(
-        &self,
-        model: &str,
-        messages: &[Message],
-        max_tokens: u32,
-        temperature: f64,
-    ) -> Result<ProviderResponse, CliError>;
 }

@@ -2,9 +2,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CliError {
-    #[error("{0}")]
-    General(String),
-
     #[error("Validation error: {0}")]
     Validation(String),
 
@@ -39,7 +36,6 @@ pub enum CliError {
 impl CliError {
     pub fn exit_code(&self) -> i32 {
         match self {
-            CliError::General(_) => 1,
             CliError::Validation(_) => 2,
             CliError::Config(_) => 3,
             CliError::Provider { .. } => 4,

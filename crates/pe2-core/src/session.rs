@@ -18,14 +18,8 @@ pub struct SessionEntry {
     pub timestamp: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-struct PromptHistory {
-    prompts: Vec<String>,
-}
-
 #[derive(Debug)]
 pub struct SessionStore {
-    history: PromptHistory,
     session_id: String,
     pub entries: Arc<Mutex<Vec<SessionEntry>>>,
 }
@@ -33,7 +27,6 @@ pub struct SessionStore {
 impl SessionStore {
     pub fn new() -> Self {
         Self {
-            history: PromptHistory::default(),
             session_id: Uuid::new_v4().to_string(),
             entries: Arc::new(Mutex::new(Vec::new())),
         }
@@ -41,21 +34,6 @@ impl SessionStore {
 
     pub fn session_id(&self) -> &str {
         &self.session_id
-    }
-
-    pub fn add_prompt(&mut self, prompt: String) {
-        self.history.prompts.push(prompt);
-        if self.history.prompts.len() > constants::MAX_HISTORY_ITEMS {
-            self.history.prompts.remove(0);
-        }
-    }
-
-    pub fn prompts(&self) -> &[String] {
-        &self.history.prompts
-    }
-
-    pub fn prompt_count(&self) -> usize {
-        self.history.prompts.len()
     }
 
     pub async fn save(&self) -> Result<(), CliError> {

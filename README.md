@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://img.shields.io/badge/rust-1.81+-orange?logo=rust&style=flat-square" />
+  <img src="https://img.shields.io/badge/rust-1.85+-orange?logo=rust&style=flat-square" />
   <img src="https://img.shields.io/github/v/tag/kleosr/PE2-CLI?style=flat-square&color=blue" />
   <img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" />
   <img src="https://img.shields.io/badge/license-ISC-blue?style=flat-square" />
@@ -24,7 +24,7 @@
 # npm meta-package (no postinstall scripts)
 npm install -g @kleosr/pe2-cli
 
-# from source (Rust 1.81+)
+# from source (Rust 1.85+)
 cargo install --git https://github.com/kleosr/PE2-CLI
 
 # or grab a release binary

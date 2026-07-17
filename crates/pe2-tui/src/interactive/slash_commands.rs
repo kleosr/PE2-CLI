@@ -1,5 +1,4 @@
 use colored::Colorize;
-use pe2_core::api_key;
 use pe2_core::config::{self, Config};
 use pe2_core::errors::CliError;
 use pe2_core::preferences::UserPreferences;
@@ -36,7 +35,8 @@ fn edit_model_field(config: &mut Config) -> Result<(), CliError> {
 }
 
 fn edit_api_key_field(config: &mut Config) -> Result<(), CliError> {
-    let masked = api_key::mask_api_key(config.api_key.as_deref());
+    print_info("API key is kept for this session only (not written to config.json). Prefer env vars.");
+    let masked = config::mask_api_key(config.api_key.as_deref());
     print!("  {} [{}]: ", "API Key".bright_white(), masked.dimmed());
     io::stdout().flush()?;
     let mut key = String::new();
