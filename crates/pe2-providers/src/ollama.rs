@@ -1,9 +1,9 @@
+use crate::client::ProviderConfig;
+use crate::http::{build_http_client, check_success, post_json, validate_base_url};
 use async_trait::async_trait;
+use pe2_core::engine::Message;
 use pe2_core::engine::{ChatOptions, EngineLlmProvider};
 use pe2_core::errors::CliError;
-use pe2_core::engine::Message;
-use crate::client::ProviderConfig;
-use crate::http::{build_http_client, post_json, validate_base_url};
 
 pub struct OllamaClient {
     client: reqwest::Client,
@@ -62,12 +62,7 @@ impl EngineLlmProvider for OllamaClient {
             "ollama",
         )
         .await?;
-        if !status.is_success() {
-            return Err(CliError::Provider {
-                provider: "ollama".to_string(),
-                message: format!("HTTP {}", status),
-            });
-        }
+        check_success(status, &json, "ollama")?;
         extract_content(&json)
     }
 }

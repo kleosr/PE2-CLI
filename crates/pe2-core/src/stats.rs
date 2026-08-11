@@ -1,10 +1,10 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
 use crate::config::stats_file_path;
 use crate::errors::CliError;
 use crate::json_store::JsonStore;
-use chrono;
+use chrono::{Local, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UsageStats {
@@ -43,15 +43,18 @@ impl StatsTracker {
                 score as f64
             };
         }
-        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let today = Local::now().format("%Y-%m-%d").to_string();
         *stats.daily_usage.entry(today).or_insert(0) += 1;
-        *stats.provider_usage.entry(provider.to_string()).or_insert(0) += 1;
-        stats.last_updated = chrono::Utc::now().to_rfc3339();
+        *stats
+            .provider_usage
+            .entry(provider.to_string())
+            .or_insert(0) += 1;
+        stats.last_updated = Utc::now().to_rfc3339();
         prune_daily_usage(stats);
         self.store.persist_best_effort();
     }
 
-    pub async fn save(&self) -> Result<(), CliError> {
+    pub fn save(&self) -> Result<(), CliError> {
         self.store.persist()
     }
 

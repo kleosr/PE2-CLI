@@ -43,7 +43,14 @@ pub fn models_for_provider(provider: &str) -> &'static [&'static str] {
             "google/gemini-2.0-flash-001",
             "google/gemini-2.0-pro",
         ],
-        "ollama" => &["llama3.2", "llama3.1", "mistral", "mixtral", "codellama", "phi4"],
+        "ollama" => &[
+            "llama3.2",
+            "llama3.1",
+            "mistral",
+            "mixtral",
+            "codellama",
+            "phi4",
+        ],
         _ => &["openai/gpt-4o-mini"],
     }
 }

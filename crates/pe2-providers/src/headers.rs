@@ -12,10 +12,7 @@ pub fn build_openrouter_headers(api_key: &str) -> Result<HeaderMap, CliError> {
     headers.insert(AUTHORIZATION, bearer_value(api_key)?);
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(REFERER, HeaderValue::from_static(constants::HTTP_REFERER));
-    headers.insert(
-        "X-Title",
-        HeaderValue::from_static(constants::HTTP_TITLE),
-    );
+    headers.insert("X-Title", HeaderValue::from_static(constants::HTTP_TITLE));
     Ok(headers)
 }
 
@@ -44,10 +41,7 @@ pub fn build_anthropic_headers(api_key: &str) -> Result<HeaderMap, CliError> {
         HeaderValue::from_str(api_key)
             .map_err(|_| CliError::Auth("Invalid Anthropic API key format".to_string()))?,
     );
-    headers.insert(
-        "anthropic-version",
-        HeaderValue::from_static("2023-06-01"),
-    );
+    headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     Ok(headers)
 }

@@ -1,11 +1,11 @@
-use pe2_core::engine::EngineLlmProvider;
-use pe2_core::errors::CliError;
-use crate::client::{ProviderConfig, ProviderKind};
-use crate::openai::OpenAIClient;
 use crate::anthropic::AnthropicClient;
+use crate::client::{ProviderConfig, ProviderKind};
 use crate::google::GoogleClient;
 use crate::ollama::OllamaClient;
+use crate::openai::OpenAIClient;
 use crate::openrouter::OpenRouterClient;
+use pe2_core::engine::EngineLlmProvider;
+use pe2_core::errors::CliError;
 
 pub fn create_client(config: &ProviderConfig) -> Result<Box<dyn EngineLlmProvider>, CliError> {
     match config.kind {

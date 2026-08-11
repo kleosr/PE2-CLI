@@ -1,9 +1,9 @@
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use std::path::PathBuf;
 use crate::config::ensure_config_dir;
 use crate::errors::CliError;
 use crate::write_atomic;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct JsonStore<T> {
@@ -13,7 +13,7 @@ pub struct JsonStore<T> {
 
 impl<T> JsonStore<T>
 where
-    T: Default + Clone + Serialize + DeserializeOwned,
+    T: Default + Serialize + DeserializeOwned,
 {
     pub fn try_load(path: PathBuf) -> Result<Self, CliError> {
         if !path.exists() {

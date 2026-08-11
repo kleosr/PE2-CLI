@@ -11,18 +11,28 @@ pub enum SlashCommand {
     Exit,
 }
 
+const SLASH_TOKENS: &[(&str, SlashCommand)] = &[
+    ("/help", SlashCommand::Help),
+    ("/h", SlashCommand::Help),
+    ("/config", SlashCommand::Config),
+    ("/c", SlashCommand::Config),
+    ("/session", SlashCommand::Session),
+    ("/s", SlashCommand::Session),
+    ("/prefs", SlashCommand::Prefs),
+    ("/p", SlashCommand::Prefs),
+    ("/stats", SlashCommand::Stats),
+    ("/clear", SlashCommand::Clear),
+    ("/exit", SlashCommand::Exit),
+    ("/quit", SlashCommand::Exit),
+    ("/q", SlashCommand::Exit),
+];
+
 pub fn resolve_slash_command(input: &str) -> Option<SlashCommand> {
     let token = input.split_whitespace().next()?;
-    match token {
-        "/help" | "/h" => Some(SlashCommand::Help),
-        "/config" | "/c" => Some(SlashCommand::Config),
-        "/session" | "/s" => Some(SlashCommand::Session),
-        "/prefs" | "/p" => Some(SlashCommand::Prefs),
-        "/stats" => Some(SlashCommand::Stats),
-        "/clear" => Some(SlashCommand::Clear),
-        "/exit" | "/quit" | "/q" => Some(SlashCommand::Exit),
-        _ => None,
-    }
+    SLASH_TOKENS
+        .iter()
+        .find(|(name, _)| *name == token)
+        .map(|(_, cmd)| *cmd)
 }
 
 pub fn validate_prompt(prompt: &str) -> Option<String> {
@@ -105,10 +115,7 @@ pub fn validate_and_suggest_command(command: &str) -> CommandValidation {
     let Some(cmd) = command.split_whitespace().next().map(str::to_string) else {
         return CommandValidation::NotCommand;
     };
-    let suggestion = known_slash_tokens()
-        .iter()
-        .min_by_key(|known| str_similarity(&cmd, known))
-        .copied();
+    let suggestion = known_slash_tokens().min_by_key(|known| str_similarity(&cmd, known));
 
     CommandValidation::Unknown {
         command: cmd,
@@ -116,11 +123,8 @@ pub fn validate_and_suggest_command(command: &str) -> CommandValidation {
     }
 }
 
-fn known_slash_tokens() -> &'static [&'static str] {
-    &[
-        "/help", "/h", "/config", "/c", "/session", "/s", "/prefs", "/p", "/stats", "/clear",
-        "/exit", "/quit", "/q",
-    ]
+fn known_slash_tokens() -> impl Iterator<Item = &'static str> {
+    SLASH_TOKENS.iter().map(|(name, _)| *name)
 }
 
 fn str_similarity(a: &str, b: &str) -> usize {

@@ -9,10 +9,7 @@ pub enum CliError {
     Config(String),
 
     #[error("[{provider}] {message}")]
-    Provider {
-        provider: String,
-        message: String,
-    },
+    Provider { provider: String, message: String },
 
     #[error("Network error: {0}")]
     Network(String),

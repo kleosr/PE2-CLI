@@ -1,12 +1,12 @@
+use crate::display::{
+    create_spinner, print_complexity_analysis, print_info, print_metrics, print_prompt_result,
+    print_refinement_history, print_success,
+};
 use pe2_core::analysis::ComplexityResult;
 use pe2_core::config::Config;
 use pe2_core::engine::{PipelineResult, PipelineRunOptions};
 use pe2_core::errors::CliError;
 use pe2_providers::runner::run_pipeline;
-use crate::display::{
-    create_spinner, print_complexity_analysis, print_info, print_metrics, print_prompt_result,
-    print_refinement_history, print_success,
-};
 
 pub fn render_complexity_preflight(analysis: &ComplexityResult, provider: &str, model: &str) {
     print_complexity_analysis(analysis);
