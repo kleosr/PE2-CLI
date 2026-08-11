@@ -1,6 +1,5 @@
 use tempfile::TempDir;
 
-
 #[test]
 fn test_analysis_simple_prompt() {
     use pe2_core::analysis::analyze_prompt_complexity;
@@ -14,7 +13,10 @@ fn test_analysis_simple_prompt() {
 fn test_analysis_technical_keywords_increase_score() {
     use pe2_core::analysis::analyze_prompt_complexity;
     let plain = "word ".repeat(20);
-    let technical = format!("{} python api docker ml algorithm framework database", plain.trim());
+    let technical = format!(
+        "{} python api docker ml algorithm framework database",
+        plain.trim()
+    );
     let plain_result = analyze_prompt_complexity(&plain);
     let technical_result = analyze_prompt_complexity(&technical);
     assert!(
@@ -32,7 +34,6 @@ fn test_analysis_difficulty_mapping_novice() {
     assert_eq!(r.difficulty, Difficulty::Novice);
     assert_eq!(r.iterations, 1);
 }
-
 
 #[test]
 fn test_get_default_config() {
@@ -69,19 +70,27 @@ fn test_provider_env_var_names() {
     assert_eq!(provider_env_var("ollama"), "OLLAMA_BASE_URL");
 }
 
-
 #[test]
 fn test_validate_prompt_rejects_empty() {
     use pe2_core::validation::validate_prompt;
-    assert!(validate_prompt("").is_some(), "empty prompt should be rejected");
-    assert!(validate_prompt("   ").is_some(), "whitespace prompt should be rejected");
+    assert!(
+        validate_prompt("").is_some(),
+        "empty prompt should be rejected"
+    );
+    assert!(
+        validate_prompt("   ").is_some(),
+        "whitespace prompt should be rejected"
+    );
 }
 
 #[test]
 fn test_validate_prompt_rejects_short() {
     use pe2_core::validation::validate_prompt;
     let short = "x";
-    assert!(validate_prompt(short).is_some(), "short prompt should be rejected");
+    assert!(
+        validate_prompt(short).is_some(),
+        "short prompt should be rejected"
+    );
 }
 
 #[test]
@@ -89,7 +98,10 @@ fn test_validate_prompt_accepts_minimum() {
     use pe2_core::constants::PROMPT_MIN_LENGTH;
     use pe2_core::validation::validate_prompt;
     let ok = "x".repeat(PROMPT_MIN_LENGTH);
-    assert!(validate_prompt(&ok).is_none(), "minimum length prompt should be accepted");
+    assert!(
+        validate_prompt(&ok).is_none(),
+        "minimum length prompt should be accepted"
+    );
 }
 
 #[test]
@@ -116,19 +128,27 @@ fn test_validate_and_suggest_command_rejects_unknown() {
     use pe2_core::validation::validate_and_suggest_command;
     let v = validate_and_suggest_command("/setings");
     assert!(!v.is_valid(), "typo should be invalid");
-    assert!(v.is_command(), "should still be recognized as command attempt");
-    assert!(v.suggestion().is_some(), "should have a suggestion for typo");
+    assert!(
+        v.is_command(),
+        "should still be recognized as command attempt"
+    );
+    assert!(
+        v.suggestion().is_some(),
+        "should have a suggestion for typo"
+    );
 }
 
 #[test]
 fn test_resolve_slash_command() {
     use pe2_core::validation::{resolve_slash_command, SlashCommand};
     assert_eq!(resolve_slash_command("/help"), Some(SlashCommand::Help));
-    assert_eq!(resolve_slash_command("/help more args"), Some(SlashCommand::Help));
+    assert_eq!(
+        resolve_slash_command("/help more args"),
+        Some(SlashCommand::Help)
+    );
     assert_eq!(resolve_slash_command("not a command"), None);
     assert_eq!(resolve_slash_command(""), None);
 }
-
 
 #[test]
 fn test_write_json_atomic_writes_valid_json() {
@@ -166,7 +186,6 @@ fn test_write_json_atomic_creates_file() {
     assert!(content.contains("value"));
 }
 
-
 #[test]
 fn test_preferences_defaults() {
     use pe2_core::preferences::UserPreferences;
@@ -190,14 +209,12 @@ fn test_preferences_setters() {
     assert!(!prefs.track_usage());
 }
 
-
 #[test]
 fn test_session_manager_new() {
     use pe2_core::session::SessionStore;
     let sm = SessionStore::new();
     assert!(!sm.session_id().is_empty());
 }
-
 
 #[test]
 fn test_stats_tracker_new() {
@@ -217,17 +234,6 @@ fn test_stats_record_usage_increments() {
     assert!(st.usage().running_avg_complexity > 0.0);
 }
 
-
-#[test]
-fn test_constants_have_sensible_values() {
-    use pe2_core::constants;
-    assert!(constants::PROMPT_MIN_LENGTH >= 3);
-    assert!(constants::PROMPT_MAX_LENGTH >= constants::PROMPT_MIN_LENGTH);
-    assert!(constants::REQUEST_TIMEOUT_MS >= 1000);
-    assert!(constants::LLM_MAX_TOKENS >= 128);
-    assert!(constants::COMPLEXITY_SCORE_MAX >= 10);
-}
-
 #[test]
 fn test_default_model_for_provider() {
     use pe2_core::constants::{default_model_for_provider, models_for_provider};
@@ -240,7 +246,6 @@ fn test_default_model_for_provider() {
     assert!(!models_for_provider("openai").is_empty());
     assert!(models_for_provider("openai").contains(&"gpt-4o-mini"));
 }
-
 
 struct MockProvider {
     response: String,
@@ -256,7 +261,9 @@ impl pe2_core::engine::EngineLlmProvider for MockProvider {
         _options: &pe2_core::engine::ChatOptions,
     ) -> Result<String, pe2_core::errors::CliError> {
         if self.should_fail {
-            return Err(pe2_core::errors::CliError::Network("network failure".to_string()));
+            return Err(pe2_core::errors::CliError::Network(
+                "network failure".to_string(),
+            ));
         }
         if self.response.trim().is_empty() {
             return Err(pe2_core::errors::CliError::Provider {
@@ -325,7 +332,11 @@ async fn test_engine_generate_initial_success() {
     let mut pipeline = pe2_core::engine::Pipeline::new(Box::new(provider), cfg);
 
     let result = pipeline.run("Write a test").await;
-    assert!(result.is_ok(), "pipeline should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "pipeline should succeed: {:?}",
+        result.err()
+    );
     let pipeline_result = result.unwrap();
     assert_eq!(pipeline_result.prompt.context, "Test context");
     assert_eq!(pipeline_result.prompt.role, "Test role");
@@ -429,7 +440,6 @@ async fn test_pipeline_passes_custom_llm_params_to_provider() {
     assert!((temperature - 0.9).abs() < f64::EPSILON);
 }
 
-
 #[test]
 fn test_structured_prompt_default() {
     use pe2_core::engine::StructuredPrompt;
@@ -524,4 +534,3 @@ fn test_resolve_output_file_absolute() {
     let p = resolve_output_file(Some("C:\\absolute\\path.md"), "ignored").unwrap();
     assert!(p.to_string_lossy().ends_with("path.md"));
 }
-

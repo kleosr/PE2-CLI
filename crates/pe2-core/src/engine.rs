@@ -38,8 +38,7 @@ fn local_prompts_dir() -> PathBuf {
 }
 
 fn rejects_traversal(path: &Path) -> bool {
-    path.components()
-        .any(|c| matches!(c, Component::ParentDir))
+    path.components().any(|c| matches!(c, Component::ParentDir))
 }
 
 pub fn resolve_output_file(
@@ -114,19 +113,11 @@ fn has_all_fields(prompt: &StructuredPrompt) -> bool {
         && !prompt.output.is_empty()
 }
 
-fn extract_json_object(content: &str) -> String {
-    let trimmed = content
-        .chars()
-        .skip_while(|&c| c != '{')
-        .collect::<String>();
-    trimmed
-        .chars()
-        .rev()
-        .skip_while(|&c| c != '}')
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect()
+fn extract_json_object(content: &str) -> &str {
+    match (content.find('{'), content.rfind('}')) {
+        (Some(start), Some(end)) if start <= end => &content[start..=end],
+        _ => "",
+    }
 }
 
 fn fallback_prompt(raw_prompt: &str) -> StructuredPrompt {
@@ -156,15 +147,24 @@ impl StructuredPrompt {
             if has_all_fields(&parsed) {
                 return Ok((parsed, FIELD_VALIDATION_EDITS.to_string()));
             }
-            return Ok((fill_empty_fields(parsed), FIELD_VALIDATION_EDITS.to_string()));
+            return Ok((
+                fill_empty_fields(parsed),
+                FIELD_VALIDATION_EDITS.to_string(),
+            ));
         }
 
         let repaired = extract_json_object(content);
-        if let Ok(parsed) = serde_json::from_str::<Self>(&repaired) {
-            return Ok((fill_empty_fields(parsed), FIELD_VALIDATION_EDITS.to_string()));
+        if let Ok(parsed) = serde_json::from_str::<Self>(repaired) {
+            return Ok((
+                fill_empty_fields(parsed),
+                FIELD_VALIDATION_EDITS.to_string(),
+            ));
         }
 
-        Ok((fallback_prompt(raw_prompt), AUTO_STRUCTURING_EDITS.to_string()))
+        Ok((
+            fallback_prompt(raw_prompt),
+            AUTO_STRUCTURING_EDITS.to_string(),
+        ))
     }
 }
 
@@ -255,7 +255,7 @@ impl Pipeline {
         let analysis = analysis::analyze_prompt_complexity(raw_prompt);
         let iterations = self.resolve_iterations(&analysis);
         self.run_refinements(raw_prompt, iterations).await?;
-        self.write_result(&analysis).await
+        self.write_result(&analysis)
     }
 
     fn resolve_iterations(&self, analysis: &ComplexityResult) -> usize {
@@ -265,21 +265,25 @@ impl Pipeline {
             .max(1) as usize
     }
 
-    async fn run_refinements(&mut self, raw_prompt: &str, iterations: usize) -> Result<(), CliError> {
+    async fn run_refinements(
+        &mut self,
+        raw_prompt: &str,
+        iterations: usize,
+    ) -> Result<(), CliError> {
         let initial = self.generate_initial(raw_prompt).await?;
-        self.current_prompt = Some(initial.prompt.clone());
+        self.current_prompt = Some(initial.prompt);
         self.history.push(RefinementEntry {
             iteration: 1,
-            edits: initial.edits.clone(),
+            edits: initial.edits,
         });
 
         for i in 1..iterations {
             match self.refine((i + 1) as u32).await {
                 Ok(r) => {
-                    self.current_prompt = Some(r.prompt.clone());
+                    self.current_prompt = Some(r.prompt);
                     self.history.push(RefinementEntry {
                         iteration: (i + 1) as u32,
-                        edits: r.edits.clone(),
+                        edits: r.edits,
                     });
                 }
                 Err(e) => {
@@ -292,7 +296,7 @@ impl Pipeline {
         Ok(())
     }
 
-    async fn write_result(&self, analysis: &ComplexityResult) -> Result<PipelineResult, CliError> {
+    fn write_result(&self, analysis: &ComplexityResult) -> Result<PipelineResult, CliError> {
         let prompt = self
             .current_prompt
             .as_ref()
@@ -329,7 +333,8 @@ impl Pipeline {
         let template = templates::get_initial_template(raw_prompt);
         let messages = build_messages(constants::LLM_SYSTEM_MESSAGE, &template);
         let content = self.call_provider(&messages).await?;
-        self.parse_provider_content(&content, raw_prompt)
+        let (prompt, edits) = StructuredPrompt::from_llm_response(&content, raw_prompt)?;
+        Ok(PromptTurn { prompt, edits })
     }
 
     async fn refine(&self, iteration_num: u32) -> Result<PromptTurn, CliError> {
@@ -341,7 +346,8 @@ impl Pipeline {
         let template = templates::get_refinement_template(&json, iteration_num);
         let messages = build_messages(constants::LLM_REFINEMENT_SYSTEM_MESSAGE, &template);
         let content = self.call_provider(&messages).await?;
-        self.parse_provider_content(&content, &json)
+        let (prompt, edits) = StructuredPrompt::from_llm_response(&content, &json)?;
+        Ok(PromptTurn { prompt, edits })
     }
 
     async fn call_provider(&self, messages: &[Message]) -> Result<String, CliError> {
@@ -360,11 +366,6 @@ impl Pipeline {
             });
         }
         Ok(content)
-    }
-
-    fn parse_provider_content(&self, content: &str, raw_prompt: &str) -> Result<PromptTurn, CliError> {
-        let (prompt, edits) = StructuredPrompt::from_llm_response(content, raw_prompt)?;
-        Ok(PromptTurn { prompt, edits })
     }
 }
 

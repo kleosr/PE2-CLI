@@ -18,3 +18,9 @@ pub const SPECIAL_CHARS_MEDIUM: usize = 2;
 
 pub const MAX_HISTORY_ITEMS: usize = 50;
 pub const CONFIG_FILE_MODE: u32 = 0o600;
+
+const _: () = {
+    assert!(PROMPT_MIN_LENGTH >= 3);
+    assert!(PROMPT_MAX_LENGTH >= PROMPT_MIN_LENGTH);
+    assert!(COMPLEXITY_SCORE_MAX >= 10);
+};

@@ -1,8 +1,8 @@
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 use crate::constants;
 use crate::errors::CliError;
 use crate::write_atomic;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -27,8 +27,8 @@ fn default_provider() -> String {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            model: constants::DEFAULT_MODEL.to_string(),
-            provider: constants::DEFAULT_PROVIDER.to_string(),
+            model: default_model(),
+            provider: default_provider(),
             api_key: None,
             output_file: None,
         }
@@ -57,11 +57,7 @@ pub fn sessions_dir_path() -> PathBuf {
 }
 
 pub fn ensure_config_dir() -> std::io::Result<()> {
-    let dir = config_dir();
-    if !dir.exists() {
-        std::fs::create_dir_all(&dir)?;
-    }
-    Ok(())
+    std::fs::create_dir_all(config_dir())
 }
 
 pub fn load_config() -> Result<Config, CliError> {

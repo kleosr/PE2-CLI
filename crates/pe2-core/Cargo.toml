@@ -13,7 +13,6 @@ regex = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
-once_cell = { workspace = true }
 dirs = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 async-trait = { workspace = true }

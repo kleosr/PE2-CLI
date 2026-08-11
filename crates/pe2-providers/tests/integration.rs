@@ -1,4 +1,3 @@
-
 #[test]
 fn test_provider_kind_from_str() {
     use pe2_providers::client::ProviderKind;
@@ -6,9 +5,15 @@ fn test_provider_kind_from_str() {
     assert_eq!(ProviderKind::parse("openai"), Some(ProviderKind::OpenAI));
     assert_eq!(ProviderKind::parse("OpenAI"), Some(ProviderKind::OpenAI));
     assert_eq!(ProviderKind::parse("OPENAI"), Some(ProviderKind::OpenAI));
-    assert_eq!(ProviderKind::parse("anthropic"), Some(ProviderKind::Anthropic));
+    assert_eq!(
+        ProviderKind::parse("anthropic"),
+        Some(ProviderKind::Anthropic)
+    );
     assert_eq!(ProviderKind::parse("google"), Some(ProviderKind::Google));
-    assert_eq!(ProviderKind::parse("openrouter"), Some(ProviderKind::OpenRouter));
+    assert_eq!(
+        ProviderKind::parse("openrouter"),
+        Some(ProviderKind::OpenRouter)
+    );
     assert_eq!(ProviderKind::parse("ollama"), Some(ProviderKind::Ollama));
     assert_eq!(ProviderKind::parse("unknown"), None);
 }
@@ -63,7 +68,6 @@ fn test_provider_kind_all() {
     assert!(all.contains(&ProviderKind::Ollama));
 }
 
-
 #[test]
 fn test_provider_config_new() {
     use pe2_providers::client::{ProviderConfig, ProviderKind};
@@ -91,7 +95,6 @@ fn test_provider_config_api_key_none() {
     assert!(cfg.api_key().is_none());
 }
 
-
 #[test]
 fn test_build_bearer_header() {
     use pe2_providers::headers::build_bearer_header;
@@ -113,7 +116,6 @@ fn test_build_openrouter_headers() {
     let title = headers.get("X-Title");
     assert!(title.is_some(), "should have X-Title header");
 }
-
 
 #[test]
 fn test_create_client_unsupported_provider_errors() {
@@ -160,9 +162,12 @@ fn test_create_client_ollama_no_key_needed() {
 
     let cfg = ProviderConfig::new(ProviderKind::Ollama, None);
     let result = create_client(&cfg);
-    assert!(result.is_ok(), "Ollama without key should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Ollama without key should succeed: {:?}",
+        result.err()
+    );
 }
-
 
 #[test]
 fn test_build_anthropic_headers() {
@@ -180,7 +185,7 @@ fn test_provider_kind_round_trip() {
     for kind in ProviderKind::all() {
         let s = kind.as_str();
         let back = ProviderKind::parse(s);
-        assert_eq!(back, Some(kind), "round-trip failed for {:?}", kind);
+        assert_eq!(back, Some(*kind), "round-trip failed for {:?}", kind);
     }
 }
 
@@ -190,6 +195,10 @@ fn test_provider_config_default_model_matches_kind() {
 
     for kind in ProviderKind::all() {
         let model = kind.default_model();
-        assert!(!model.is_empty(), "default model for {:?} should not be empty", kind);
+        assert!(
+            !model.is_empty(),
+            "default model for {:?} should not be empty",
+            kind
+        );
     }
 }

@@ -17,9 +17,9 @@ fn resolve_iterations_defaults_to_auto_difficulty() {
 }
 
 #[test]
-fn explicit_iterations_disables_auto_difficulty_default() {
-    let args = Args::try_parse_from(["pe2", "--iterations", "3", "this is a long enough prompt"])
-        .unwrap();
+fn explicit_iterations_are_parsed() {
+    let args =
+        Args::try_parse_from(["pe2", "--iterations", "3", "this is a long enough prompt"]).unwrap();
     assert_eq!(args.iterations, Some(3));
 }
 

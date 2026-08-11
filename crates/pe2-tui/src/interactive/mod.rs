@@ -1,10 +1,11 @@
-mod slash_commands;
 mod prompt;
+mod slash_commands;
 
+use crate::banner::{print_banner, print_banner_brief};
+use crate::display::{print_error, print_info};
 use colored::Colorize;
 use crossterm::{
-    cursor,
-    execute,
+    cursor, execute,
     terminal::{Clear, ClearType},
 };
 use pe2_core::config;
@@ -14,12 +15,10 @@ use pe2_core::preferences::UserPreferences;
 use pe2_core::session::SessionStore;
 use pe2_core::stats::StatsTracker;
 use pe2_core::validation::{
-    resolve_slash_command, unknown_command_message, validate_and_suggest_command, CommandValidation,
-    SlashCommand,
+    resolve_slash_command, unknown_command_message, validate_and_suggest_command,
+    CommandValidation, SlashCommand,
 };
 use std::io::{self, Write};
-use crate::banner::{print_banner, print_banner_brief};
-use crate::display::{print_error, print_info};
 
 const HELP_TEXT: &str = r#"
   Available Commands:
@@ -110,8 +109,8 @@ impl InteractiveSession {
             SlashCommand::Help => print_info(HELP_TEXT),
             SlashCommand::Config => slash_commands::edit_config(&mut self.config).await?,
             SlashCommand::Session => slash_commands::show_session(&self.session_store).await,
-            SlashCommand::Prefs => slash_commands::show_preferences(&self.preferences).await,
-            SlashCommand::Stats => slash_commands::show_stats(&self.stats).await,
+            SlashCommand::Prefs => slash_commands::show_preferences(&self.preferences),
+            SlashCommand::Stats => slash_commands::show_stats(&self.stats),
             SlashCommand::Clear => {
                 execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0, 0))?;
                 print_banner_brief();
