@@ -1,8 +1,6 @@
-#[macro_use]
-extern crate napi_derive;
-
 use napi::bindgen_prelude::*;
 use napi::Status;
+use napi_derive::napi;
 use pe2_core::analysis;
 use pe2_core::config;
 use pe2_core::engine::PipelineRunOptions;
@@ -25,9 +23,7 @@ pub fn save_config(config_json: String) -> Result<()> {
 
 #[napi]
 pub fn get_config_path() -> String {
-    config::config_file_path()
-        .to_string_lossy()
-        .to_string()
+    config::config_file_path().to_string_lossy().to_string()
 }
 
 #[napi]
@@ -119,7 +115,6 @@ fn map_cli_error(err: CliError) -> Error {
     let code = cli_error_code(&err);
     let status = match &err {
         CliError::Validation(_) => Status::InvalidArg,
-        CliError::Auth(_) => Status::GenericFailure,
         _ => Status::GenericFailure,
     };
     Error::new(status, format!("{code}: {err}"))
@@ -142,12 +137,18 @@ mod tests {
 
     #[test]
     fn cli_error_codes_are_stable() {
-        assert_eq!(cli_error_code(&CliError::Validation("x".into())), "VALIDATION_ERROR");
+        assert_eq!(
+            cli_error_code(&CliError::Validation("x".into())),
+            "VALIDATION_ERROR"
+        );
         assert_eq!(cli_error_code(&CliError::Auth("x".into())), "AUTH_ERROR");
-        assert_eq!(cli_error_code(&CliError::Provider {
-            provider: "openai".into(),
-            message: "fail".into(),
-        }), "PROVIDER_ERROR");
+        assert_eq!(
+            cli_error_code(&CliError::Provider {
+                provider: "openai".into(),
+                message: "fail".into(),
+            }),
+            "PROVIDER_ERROR"
+        );
     }
 
     #[test]

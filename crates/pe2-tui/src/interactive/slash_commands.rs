@@ -1,3 +1,4 @@
+use crate::display::{print_info, print_separator, print_success};
 use colored::Colorize;
 use pe2_core::config::{self, Config};
 use pe2_core::errors::CliError;
@@ -5,7 +6,6 @@ use pe2_core::preferences::UserPreferences;
 use pe2_core::session::SessionStore;
 use pe2_core::stats::StatsTracker;
 use std::io::{self, Write};
-use crate::display::{print_info, print_separator, print_success};
 
 pub async fn edit_config(config: &mut Config) -> Result<(), CliError> {
     print_config_header();
@@ -23,19 +23,27 @@ fn print_config_header() {
 }
 
 fn edit_provider_field(config: &mut Config) -> Result<(), CliError> {
-    prompt_field("Provider", &config.provider.clone(), |cfg, value| {
-        cfg.provider = value;
-    }, config)
+    prompt_field(
+        "Provider",
+        |cfg| &cfg.provider,
+        |cfg, value| cfg.provider = value,
+        config,
+    )
 }
 
 fn edit_model_field(config: &mut Config) -> Result<(), CliError> {
-    prompt_field("Model", &config.model.clone(), |cfg, value| {
-        cfg.model = value;
-    }, config)
+    prompt_field(
+        "Model",
+        |cfg| &cfg.model,
+        |cfg, value| cfg.model = value,
+        config,
+    )
 }
 
 fn edit_api_key_field(config: &mut Config) -> Result<(), CliError> {
-    print_info("API key is kept for this session only (not written to config.json). Prefer env vars.");
+    print_info(
+        "API key is kept for this session only (not written to config.json). Prefer env vars.",
+    );
     let masked = config::mask_api_key(config.api_key.as_deref());
     print!("  {} [{}]: ", "API Key".bright_white(), masked.dimmed());
     io::stdout().flush()?;
@@ -56,17 +64,17 @@ fn save_edited_config(config: &mut Config) -> Result<(), CliError> {
 
 fn prompt_field(
     label: &str,
-    current: &str,
-    apply: fn(&mut Config, String),
+    get: fn(&Config) -> &String,
+    set: fn(&mut Config, String),
     config: &mut Config,
 ) -> Result<(), CliError> {
-    print!("  {} [{}]: ", label.bright_white(), current.dimmed());
+    print!("  {} [{}]: ", label.bright_white(), get(config).dimmed());
     io::stdout().flush()?;
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     let value = input.trim();
     if !value.is_empty() {
-        apply(config, value.to_string());
+        set(config, value.to_string());
     }
     Ok(())
 }
@@ -78,7 +86,11 @@ pub async fn show_session(session_store: &SessionStore) {
         return;
     }
     println!();
-    println!("  {} {}", "◆".bright_cyan(), "Session History".bright_white().bold());
+    println!(
+        "  {} {}",
+        "◆".bright_cyan(),
+        "Session History".bright_white().bold()
+    );
     println!();
     for (i, entry) in entries.iter().rev().take(10).enumerate() {
         let preview: String = entry.prompt.chars().take(60).collect();
@@ -93,12 +105,24 @@ pub async fn show_session(session_store: &SessionStore) {
     println!();
 }
 
-pub async fn show_preferences(preferences: &UserPreferences) {
+pub fn show_preferences(preferences: &UserPreferences) {
     println!();
-    println!("  {} {}", "◆".bright_yellow(), "Preferences".bright_white().bold());
+    println!(
+        "  {} {}",
+        "◆".bright_yellow(),
+        "Preferences".bright_white().bold()
+    );
     println!();
-    println!("  {} {}", "  Theme:".dimmed(), preferences.theme().bright_white());
-    println!("  {} {}", "  Compact:".dimmed(), format!("{}", preferences.compact()).bright_white());
+    println!(
+        "  {} {}",
+        "  Theme:".dimmed(),
+        preferences.theme().bright_white()
+    );
+    println!(
+        "  {} {}",
+        "  Compact:".dimmed(),
+        format!("{}", preferences.compact()).bright_white()
+    );
     println!(
         "  {} {}",
         "  Track Usage:".dimmed(),
@@ -107,7 +131,7 @@ pub async fn show_preferences(preferences: &UserPreferences) {
     println!();
 }
 
-pub async fn show_stats(stats: &StatsTracker) {
+pub fn show_stats(stats: &StatsTracker) {
     let usage = stats.usage();
     if usage.total_prompts == 0 {
         println!("  {}", "No usage statistics yet.".dimmed());
@@ -175,10 +199,10 @@ mod tests {
     use pe2_core::stats::StatsTracker;
     use tempfile::TempDir;
 
-    #[tokio::test]
-    async fn show_stats_handles_empty_tracker() {
+    #[test]
+    fn show_stats_handles_empty_tracker() {
         let dir = TempDir::new().unwrap();
         let stats = StatsTracker::from_path(dir.path().join("stats.json"));
-        show_stats(&stats).await;
+        show_stats(&stats);
     }
 }

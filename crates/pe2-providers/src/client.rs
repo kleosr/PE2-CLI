@@ -40,8 +40,8 @@ impl ProviderKind {
         pe2_core::constants::models_for_provider(self.as_str())
     }
 
-    pub fn all() -> Vec<ProviderKind> {
-        vec![
+    pub fn all() -> &'static [ProviderKind] {
+        &[
             ProviderKind::OpenAI,
             ProviderKind::Anthropic,
             ProviderKind::Google,
