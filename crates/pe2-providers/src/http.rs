@@ -7,7 +7,9 @@ pub const MAX_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
 
 pub fn build_http_client() -> Result<reqwest::Client, CliError> {
     reqwest::Client::builder()
-        .timeout(std::time::Duration::from_millis(constants::REQUEST_TIMEOUT_MS))
+        .timeout(std::time::Duration::from_millis(
+            constants::REQUEST_TIMEOUT_MS,
+        ))
         .build()
         .map_err(|e| CliError::Network(e.to_string()))
 }
@@ -16,7 +18,9 @@ pub fn validate_base_url(base_url: &str) -> Result<(), CliError> {
     if base_url.starts_with("http://") || base_url.starts_with("https://") {
         Ok(())
     } else {
-        Err(CliError::Validation(format!("Invalid base URL: {base_url}")))
+        Err(CliError::Validation(format!(
+            "Invalid base URL: {base_url}"
+        )))
     }
 }
 
@@ -75,15 +79,18 @@ pub async fn post_json(
 
 pub fn parse_json_body(
     status: StatusCode,
-    text: &str,
+    body: &[u8],
     provider: &str,
 ) -> Result<(StatusCode, serde_json::Value), CliError> {
-    let json: serde_json::Value = serde_json::from_str(text).map_err(|_| CliError::Provider {
+    let json: serde_json::Value = serde_json::from_slice(body).map_err(|_| CliError::Provider {
         provider: provider.to_string(),
         message: format!(
             "Non-JSON response (HTTP {}): {}",
             status.as_u16(),
-            text.chars().take(200).collect::<String>()
+            String::from_utf8_lossy(body)
+                .chars()
+                .take(200)
+                .collect::<String>()
         ),
     })?;
     Ok((status, json))
@@ -104,8 +111,7 @@ pub async fn parse_json_response(
             message: format!("Response body exceeds {} bytes", MAX_RESPONSE_BYTES),
         });
     }
-    let text = String::from_utf8_lossy(&bytes);
-    parse_json_body(status, &text, provider)
+    parse_json_body(status, &bytes, provider)
 }
 
 #[cfg(test)]
@@ -115,22 +121,21 @@ mod tests {
 
     #[test]
     fn parse_json_body_accepts_valid_json() {
-        let (status, json) =
-            parse_json_body(StatusCode::OK, r#"{"ok":true}"#, "test").unwrap();
+        let (status, json) = parse_json_body(StatusCode::OK, br#"{"ok":true}"#, "test").unwrap();
         assert_eq!(status, StatusCode::OK);
         assert_eq!(json["ok"], true);
     }
 
     #[test]
     fn parse_json_body_rejects_non_json() {
-        let err = parse_json_body(StatusCode::BAD_GATEWAY, "not-json", "test").unwrap_err();
+        let err = parse_json_body(StatusCode::BAD_GATEWAY, b"not-json", "test").unwrap_err();
         match err {
             CliError::Provider { provider, message } => {
                 assert_eq!(provider, "test");
                 assert!(message.contains("Non-JSON response"));
                 assert!(message.contains("502"));
             }
-            other => assert!(false, "expected Provider error, got {other}"),
+            other => panic!("expected Provider error, got {other}"),
         }
     }
 

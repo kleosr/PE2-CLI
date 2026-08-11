@@ -1,9 +1,9 @@
+use crate::theme::{styled_label, styled_value, PE2_THEME};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use pe2_core::analysis::ComplexityResult;
 use pe2_core::engine::{RefinementEntry, StructuredPrompt};
 use pe2_core::errors::CliError;
-use crate::theme::{styled_label, styled_value, PE2_THEME};
 
 const SPINNER_TEMPLATE: &str = "{spinner:.green} {msg}";
 
@@ -21,7 +21,11 @@ pub fn print_complexity_analysis(analysis: &ComplexityResult) {
         "  {} {}: {}",
         "◇".bright_blue(),
         styled_label("Complexity Score"),
-        styled_value(&format!("{}/{}", analysis.score, pe2_core::constants::COMPLEXITY_SCORE_MAX)),
+        styled_value(&format!(
+            "{}/{}",
+            analysis.score,
+            pe2_core::constants::COMPLEXITY_SCORE_MAX
+        )),
     );
     println!(
         "  {} {}: {} words",
@@ -42,14 +46,22 @@ fn print_prompt_field(prefix: &str, label: &str, value: &str) {
 
 pub fn print_prompt_result(prompt: &StructuredPrompt, output_file: &str) {
     println!();
-    println!("  {} {}", "┌".dimmed(), "Optimized Prompt".bright_white().bold());
+    println!(
+        "  {} {}",
+        "┌".dimmed(),
+        "Optimized Prompt".bright_white().bold()
+    );
     print_prompt_field("├─", "Context:", &prompt.context);
     print_prompt_field("├─", "Role:", &prompt.role);
     print_prompt_field("├─", "Task:", &prompt.task);
     print_prompt_field("├─", "Constraints:", &prompt.constraints);
     print_prompt_field("├─", "Output:", &prompt.output);
     println!("  {} {}", "└─".dimmed(), styled_label("Saved to:"));
-    println!("  {}   {}", " ".dimmed(), output_file.bright_cyan().underline());
+    println!(
+        "  {}   {}",
+        " ".dimmed(),
+        output_file.bright_cyan().underline()
+    );
     println!();
 }
 
@@ -106,10 +118,6 @@ pub fn print_success(msg: &str) {
 
 pub fn print_info(msg: &str) {
     println!("  ℹ {}", (PE2_THEME.primary)(msg.to_string()));
-}
-
-pub fn print_warning(msg: &str) {
-    println!("  ⚠ {}", (PE2_THEME.warning)(msg.to_string()));
 }
 
 pub fn print_separator() {
