@@ -1,4 +1,5 @@
 use clap::Parser;
+use pe2_core::constants::{LLM_MAX_TOKENS, LLM_TEMPERATURE};
 use pe2_tui::banner::TAGLINE;
 
 fn long_help() -> &'static str {
@@ -31,7 +32,11 @@ pub struct Args {
     #[arg(long, help = "Open interactive REPL (same as omitting prompt)")]
     pub config: bool,
 
-    #[arg(long, short = 'p', help = "LLM provider (openai, anthropic, google, openrouter, ollama)")]
+    #[arg(
+        long,
+        short = 'p',
+        help = "LLM provider (openai, anthropic, google, openrouter, ollama)"
+    )]
     pub provider: Option<String>,
 
     #[arg(long, short = 'm', help = "Model identifier for the selected provider")]
@@ -43,15 +48,23 @@ pub struct Args {
     #[arg(long, short = 'o', help = "Output file path")]
     pub output_file: Option<String>,
 
-    #[arg(long, short = 'i', help = "Number of refinement iterations (overrides auto-detection)")]
+    #[arg(
+        long,
+        short = 'i',
+        help = "Number of refinement iterations (overrides auto-detection)"
+    )]
     pub iterations: Option<u32>,
 
-    #[arg(long, default_value_t = true, help = "Enable auto-difficulty detection")]
+    #[arg(
+        long,
+        default_value_t = true,
+        help = "Enable auto-difficulty detection"
+    )]
     pub auto_difficulty: bool,
 
-    #[arg(long, default_value = "1024", help = "Max tokens for LLM response")]
+    #[arg(long, default_value_t = LLM_MAX_TOKENS, help = "Max tokens for LLM response")]
     pub max_tokens: u32,
 
-    #[arg(long, default_value_t = 0.3, help = "Temperature for LLM sampling")]
+    #[arg(long, default_value_t = LLM_TEMPERATURE, help = "Temperature for LLM sampling")]
     pub temperature: f64,
 }
