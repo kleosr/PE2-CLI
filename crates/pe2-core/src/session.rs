@@ -1,11 +1,11 @@
-use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
-use crate::constants;
 use crate::config::{ensure_config_dir, sessions_dir_path};
+use crate::constants;
 use crate::errors::CliError;
 use crate::write_atomic;
-use uuid::Uuid;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::sync::Mutex;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionEntry {

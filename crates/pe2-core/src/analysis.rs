@@ -158,7 +158,10 @@ mod tests {
     #[test]
     fn test_technical_keywords_increase_score() {
         let plain = "word ".repeat(20);
-        let technical = format!("{} python api docker ml algorithm framework database", plain);
+        let technical = format!(
+            "{} python api docker ml algorithm framework database",
+            plain
+        );
         let plain_result = analyze_prompt_complexity(&plain);
         let technical_result = analyze_prompt_complexity(&technical);
         assert!(technical_result.score >= plain_result.score);

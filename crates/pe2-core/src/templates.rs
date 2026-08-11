@@ -1,5 +1,6 @@
 use crate::analysis::ComplexityResult;
 use crate::constants;
+use std::fmt::Write as _;
 
 pub fn get_initial_template(raw_prompt: &str) -> String {
     constants::INITIAL_PROMPT_TEMPLATE.replace("{raw_prompt}", raw_prompt)
@@ -18,35 +19,30 @@ pub fn format_markdown_output(
     iterations: usize,
 ) -> String {
     let mut output = String::with_capacity(2048);
-    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    output.push_str("# PE² Optimized Prompt\n\n");
-    output.push_str(&format!("**Generated:** {}  \n", now));
-    output.push_str(&format!(
-        "**Difficulty:** {} (Score: {}/{})  \n\n",
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    let _ = writeln!(output, "# PE² Optimized Prompt\n");
+    let _ = writeln!(output, "**Generated:** {now}  ");
+    let _ = writeln!(
+        output,
+        "**Difficulty:** {} (Score: {}/{})  \n",
         analysis.difficulty.as_str(),
         analysis.score,
         constants::COMPLEXITY_SCORE_MAX
-    ));
-    output.push_str("---\n\n");
-    output.push_str("## Optimized Prompt\n\n");
-    output.push_str("```markdown\n");
+    );
+    output.push_str("---\n\n## Optimized Prompt\n\n```markdown\n");
     output.push_str(pe2_prompt);
-    output.push_str("\n```\n\n");
-    output.push_str("---\n\n");
-    output.push_str("## Refinement History\n\n");
+    output.push_str("\n```\n\n---\n\n## Refinement History\n\n");
     for (iteration, edit) in history {
-        output.push_str(&format!("### Iteration {}\n\n{}\n\n", iteration, edit));
+        let _ = writeln!(output, "### Iteration {iteration}\n\n{edit}\n");
     }
-    output.push_str("---\n\n");
-    output.push_str("## Run Metrics\n\n");
-    output.push_str("| Metric | Value |\n");
-    output.push_str("|--------|-------|\n");
-    output.push_str(&format!("| Difficulty | {} |\n", analysis.difficulty.as_str()));
-    output.push_str(&format!(
-        "| Complexity Score | {}/{} |\n",
+    output.push_str("---\n\n## Run Metrics\n\n| Metric | Value |\n|--------|-------|\n");
+    let _ = writeln!(output, "| Difficulty | {} |", analysis.difficulty.as_str());
+    let _ = writeln!(
+        output,
+        "| Complexity Score | {}/{} |",
         analysis.score,
         constants::COMPLEXITY_SCORE_MAX
-    ));
-    output.push_str(&format!("| Iterations Applied | {} |\n", iterations));
+    );
+    let _ = writeln!(output, "| Iterations Applied | {iterations} |");
     output
 }

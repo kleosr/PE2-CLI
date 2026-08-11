@@ -1,11 +1,11 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
 fn static_regex(pattern: &'static str) -> Regex {
     Regex::new(pattern).expect("hardcoded analysis regex pattern is valid")
 }
 
-pub static TECH_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
+pub static TECH_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
         static_regex(r"\b(api|json|rest|graphql|grpc|restful)\b"),
         static_regex(r"\b(sql|nosql|database|postgres|mongo|redis|mysql)\b"),
@@ -22,7 +22,7 @@ pub static TECH_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
     ]
 });
 
-pub static DOMAIN_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
+pub static DOMAIN_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
         static_regex(r"\b(frontend|react|vue|angular|svelte|ui|ux)\b"),
         static_regex(r"\b(backend|server|node|express|fastapi|django|spring)\b"),
@@ -37,13 +37,13 @@ pub static DOMAIN_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
     ]
 });
 
-pub static STRUCTURAL_PATTERN: Lazy<Regex> =
-    Lazy::new(|| static_regex(r"(\n\s*\d+\.|\n\s*\-|```|#)"));
+pub static STRUCTURAL_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| static_regex(r"(\n\s*\d+\.|\n\s*\-|```|#)"));
 
-pub static LOGIC_PATTERN: Lazy<Regex> =
-    Lazy::new(|| static_regex(r"\b(if|then|when|unless|until|depending|while)\b"));
+pub static LOGIC_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| static_regex(r"\b(if|then|when|unless|until|depending|while)\b"));
 
-pub static SPECIAL_CHARS_PATTERN: Lazy<Regex> = Lazy::new(|| static_regex(r"[;\{\[]"));
+pub static SPECIAL_CHARS_PATTERN: LazyLock<Regex> = LazyLock::new(|| static_regex(r"[;\{\[]"));
 
 #[cfg(test)]
 mod tests {
