@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # pe2-core — Engine & State
 
 **Parent:** `AGENTS.md`
