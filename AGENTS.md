@@ -1,53 +1,63 @@
 # AGENTS.md
 
-## Overview
-
+Repo-owned agent handbook for PE²-CLI (`pe2`). Single source of truth across coding agents.
 CLI that turns raw prompts into PE²-structured prompts via LLM providers (OpenAI, Anthropic, Google, OpenRouter, Ollama). Rust 2021 workspace (`4.0.2`), binary `pe2`, tokio + reqwest (rustls).
 
-## Where to look
+## Rules
 
-| Task | Path |
-|------|------|
-| Binary / modes | `crates/pe2-cli/src/main.rs`, `args.rs` |
-| Pipeline | `crates/pe2-core/src/engine.rs` |
-| Config / keys | `crates/pe2-core/src/config.rs` |
-| Complexity scoring | `crates/pe2-core/src/analysis.rs` |
-| Provider trait / factory | `crates/pe2-providers/src/client.rs`, `factory.rs` |
-| Pipeline glue | `crates/pe2-providers/src/runner.rs` |
-| Shared HTTP | `crates/pe2-providers/src/http.rs` |
-| Interactive REPL | `crates/pe2-tui/src/interactive/` |
-| Generate + render | `crates/pe2-tui/src/prompt_flow.rs` |
-| Node napi bridge | `crates/pe2-bindings/src/lib.rs` |
-| Release CI | `.github/workflows/publish.yml` |
-| npm meta | `npm/package.json` |
+### Toolchain & MSRV
+- Rust edition 2021, MSRV 1.85.0 (`.rust-toolchain.toml`, `.github/workflows/ci.yml`).
+- PR CI checks: `cargo test --workspace`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`.
+- Pinned workspace crates for MSRV (`rules-backlog.md`, `Cargo.toml`): `comfy-table = "=7.1.4"`, `napi-build = "=2.1.3"`, lockfile `idna_adapter 1.2.0`.
+- Do not add dependencies or syntax incompatible with Rust 1.85.0.
 
-**DAG:** `cli → {core, providers, tui}` · `tui → {core, providers}` · `bindings → {core, providers}` · `providers → core`
+### Codebase Conventions
+- Error handling: `anyhow` at CLI/TUI boundary; `thiserror` (`pe2_core::errors::CliError`) in core.
+- Persistence: JSON files persisted via `write_atomic` / `JsonStore` (config, preferences, stats). Session vector uses `write_json_atomic`.
+- DAG: `cli → {core, providers, tui}` · `tui → {core, providers}` · `bindings → {core, providers}` · `providers → core`. Respect crate boundaries; no circular dependencies.
+- Pipeline integration: Providers implement `pe2_core::engine::EngineLlmProvider` directly; callers (CLI/TUI) use `pe2_providers::runner::run_pipeline`. Do not wire providers by hand in CLI/TUI.
+- Secrets: Never persist API keys in `~/.kleosr-pe2/config.json` (in-memory session or env vars only: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OPENROUTER_API_KEY`, `OLLAMA_BASE_URL`).
 
-## Commands
+### Package Metadata
+- npm meta-package under `npm/package.json` (`@kleosr/pe2-cli` version 4.0.2). Root `package.json` is private and version-skewed (4.0.3).
+- Default prompt output lands in `./pe2-prompts/` (ignored by git) unless `--output-file` is specified.
 
-| Action | Command |
-|--------|---------|
-| Build | `cargo build` |
-| Test | `cargo test` |
-| Help | `cargo run -- --help` |
-| One-shot | `cargo run -- "prompt text"` |
-| Interactive | `cargo run --` (or `--config`) |
+## Skills
 
-## Conventions
+Reusable task recipes go in `.agents/skills`.
+None currently exist in this repository. Add recipes to `.agents/skills/<skill-name>/` when reusable task procedures are introduced.
 
-- `anyhow` at CLI boundary; `thiserror` (`CliError`) in core
-- Persist JSON via `write_atomic` / `JsonStore` (config, prefs, stats, sessions)
-- Providers implement `EngineLlmProvider` directly; callers use `run_pipeline`
-- Toolchain: `.rust-toolchain.toml` (1.85.0); PR CI in `.github/workflows/ci.yml`
+## Workflows
 
-## Anti-patterns
+### Build & Test
+- Build workspace: `cargo build`
+- Run workspace tests: `cargo test --workspace` (or `cargo test`)
+- Run crate-specific tests:
+  - `cargo test -p pe2-core`
+  - `cargo test -p pe2-providers`
+  - `cargo test -p pe2-cli`
+  - `cargo test -p pe2-tui`
+- Linter / Clippy: `cargo clippy --all-targets -- -D warnings`
+- Code formatting check: `cargo fmt --check`
+- Format code: `cargo fmt`
 
-- Do not wire providers in CLI/TUI by hand — use `pe2_providers::runner::run_pipeline`
-- Do not persist API keys in `config.json` (session/env only)
+### Running the CLI
+- One-shot generation: `cargo run -- "prompt text"`
+- Interactive REPL / configuration: `cargo run --` or `cargo run -- --config`
+- Help: `cargo run -- --help`
 
-## Notes
+### Submodule & Crate Navigation
+- CLI binary / modes: `crates/pe2-cli/src/main.rs`, `src/args.rs` (adapter: `crates/pe2-cli/AGENTS.md`)
+- Core engine / pipeline: `crates/pe2-core/src/engine.rs`, `src/analysis.rs`, `src/config.rs` (adapter: `crates/pe2-core/AGENTS.md`)
+- Providers / adapters: `crates/pe2-providers/src/client.rs`, `src/factory.rs`, `src/runner.rs` (adapter: `crates/pe2-providers/AGENTS.md`)
+- Terminal UI / interactive REPL: `crates/pe2-tui/src/interactive/`, `src/prompt_flow.rs` (adapter: `crates/pe2-tui/AGENTS.md`)
+- Node.js napi bindings: `crates/pe2-bindings/src/lib.rs`
+- CI & Release: `.github/workflows/ci.yml`, `.github/workflows/publish.yml`
 
-- Config: `~/.kleosr-pe2/` (`config.json`, `preferences.json`, `stats.json`, `sessions/`)
-- Default output: `./pe2-prompts/` unless `--output-file`
-- npm: `@kleosr/pe2-cli` (`npm/`); root `package.json` is private and version-skewed
-- Child `AGENTS.md` under `crates/pe2-{core,providers,cli,tui}/` (may be denser than this root map)
+## Memory
+
+Project memory and context are maintained in versioned markdown files under the repository root:
+- `README.md`: Architecture overview, CLI flags, supported providers, environment variables, and usage.
+- `rules-backlog.md`: Workspace status, MSRV notes, and dependency pin constraints.
+- Crate-level sibling guides: `crates/pe2-*/AGENTS.md` (scoped module maps extending this handbook).
+This repository does not use a `docs/` directory or vendor-specific memory systems; all persistent context lives in tracked markdown files.
