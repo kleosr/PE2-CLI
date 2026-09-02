@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # pe2-cli — Binary Entry
 
 **Parent:** `AGENTS.md`

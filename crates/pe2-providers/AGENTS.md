@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # pe2-providers — LLM Adapters
 
 **Parent:** `AGENTS.md`
