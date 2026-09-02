@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # pe2-tui — Terminal UI
 
 **Parent:** `AGENTS.md`
