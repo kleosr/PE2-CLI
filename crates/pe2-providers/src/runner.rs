@@ -1,5 +1,4 @@
-use crate::client::{ProviderConfig, ProviderKind};
-use crate::factory::create_client;
+use crate::client::{create_client, ProviderConfig, ProviderKind};
 use pe2_core::config::{self, Config};
 use pe2_core::constants;
 use pe2_core::engine::{Pipeline, PipelineResult, PipelineRunOptions};

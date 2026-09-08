@@ -7,7 +7,7 @@ use pe2_core::session::SessionStore;
 use pe2_core::stats::StatsTracker;
 use std::io::{self, Write};
 
-pub async fn edit_config(config: &mut Config) -> Result<(), CliError> {
+pub fn edit_config(config: &mut Config) -> Result<(), CliError> {
     print_config_header();
     edit_provider_field(config)?;
     edit_model_field(config)?;
@@ -79,8 +79,8 @@ fn prompt_field(
     Ok(())
 }
 
-pub async fn show_session(session_store: &SessionStore) {
-    let entries = session_store.entries.lock().await;
+pub fn show_session(session_store: &SessionStore) {
+    let entries = &session_store.entries;
     if entries.is_empty() {
         println!("  {}", "No sessions recorded yet.".dimmed());
         return;
@@ -113,16 +113,6 @@ pub fn show_preferences(preferences: &UserPreferences) {
         "Preferences".bright_white().bold()
     );
     println!();
-    println!(
-        "  {} {}",
-        "  Theme:".dimmed(),
-        preferences.theme().bright_white()
-    );
-    println!(
-        "  {} {}",
-        "  Compact:".dimmed(),
-        format!("{}", preferences.compact()).bright_white()
-    );
     println!(
         "  {} {}",
         "  Track Usage:".dimmed(),
