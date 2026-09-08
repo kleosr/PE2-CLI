@@ -67,23 +67,6 @@ pub enum CommandValidation {
     },
 }
 
-impl CommandValidation {
-    pub fn is_valid(&self) -> bool {
-        matches!(self, Self::Valid)
-    }
-
-    pub fn is_command(&self) -> bool {
-        !matches!(self, Self::NotCommand)
-    }
-
-    pub fn suggestion(&self) -> Option<&'static str> {
-        match self {
-            Self::Unknown { suggestion, .. } => *suggestion,
-            _ => None,
-        }
-    }
-}
-
 pub fn unknown_command_message(validation: &CommandValidation) -> Option<String> {
     match validation {
         CommandValidation::Unknown {
