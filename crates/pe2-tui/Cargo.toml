@@ -13,7 +13,6 @@ crossterm = { workspace = true }
 colored = { workspace = true }
 indicatif = { workspace = true }
 comfy-table = { workspace = true }
-serde_json = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
 

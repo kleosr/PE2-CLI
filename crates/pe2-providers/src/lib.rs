@@ -1,6 +1,5 @@
 pub mod anthropic;
 pub mod client;
-pub mod factory;
 pub mod google;
 pub mod headers;
 pub mod http;

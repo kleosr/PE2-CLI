@@ -21,9 +21,6 @@
 ## Install
 
 ```bash
-# npm meta-package (no postinstall scripts)
-npm install -g @kleosr/pe2-cli
-
 # from source (Rust 1.85+)
 cargo install --git https://github.com/kleosr/PE2-CLI
 
@@ -102,11 +99,10 @@ crates/
 ├── pe2-core/       — config, analysis, engine/pipeline, templates, persistence
 ├── pe2-providers/  — OpenAI, Anthropic, Google, Ollama, OpenRouter adapters
 ├── pe2-tui/        — banner, spinner, themed output, interactive REPL
-├── pe2-cli/        — clap entry, single-shot and interactive dispatch
-└── pe2-bindings/   — napi-rs bridge (optional Node.js addon)
+└── pe2-cli/        — clap entry, single-shot and interactive dispatch
 ```
 
-No circular deps. About 3,200 lines of Rust across 36 source files.
+No circular deps. Single binary.
 
 ## Development
 
