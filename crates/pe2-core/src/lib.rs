@@ -3,7 +3,6 @@ pub mod config;
 pub mod constants;
 pub mod engine;
 pub mod errors;
-pub mod json_store;
 pub mod preferences;
 pub mod session;
 pub mod stats;

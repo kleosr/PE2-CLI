@@ -18,9 +18,9 @@ Config, analysis, `Pipeline` / `EngineLlmProvider` / `Message`, templates, sessi
 | Constants | `src/constants/` | `limits`, `llm`, `patterns` (LazyLock), `providers` |
 | Errors | `src/errors.rs` | `CliError` + exit codes |
 | Templates | `src/templates.rs` | Initial/refinement prompt templates, markdown output |
-| Persistence | `src/{json_store,write_atomic}.rs` | `JsonStore<T>` over atomic writes |
-| Stats / prefs | `src/{stats,preferences}.rs` | Via `JsonStore` |
-| Session | `src/session.rs` | `Arc<Mutex<Vec<_>>>` + `write_json_atomic` (not `JsonStore`) |
+| Persistence | `src/write_atomic.rs` | Atomic JSON/text writes + `read_json_or_default` |
+| Stats / prefs | `src/{stats,preferences}.rs` | Stats persist; prefs load `track_usage` |
+| Session | `src/session.rs` | In-memory `Vec<SessionEntry>` |
 
 ## Tests
 

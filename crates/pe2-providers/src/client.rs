@@ -1,7 +1,12 @@
+use crate::anthropic::AnthropicClient;
+use crate::google::GoogleClient;
+use crate::ollama::OllamaClient;
+use crate::openai::OpenAIClient;
+use crate::openrouter::OpenRouterClient;
+use pe2_core::engine::EngineLlmProvider;
 use pe2_core::errors::CliError;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProviderKind {
     OpenAI,
     Anthropic,
@@ -30,24 +35,6 @@ impl ProviderKind {
             ProviderKind::OpenRouter => "openrouter",
             ProviderKind::Ollama => "ollama",
         }
-    }
-
-    pub fn default_model(&self) -> &'static str {
-        pe2_core::constants::default_model_for_provider(self.as_str())
-    }
-
-    pub fn models(&self) -> &[&'static str] {
-        pe2_core::constants::models_for_provider(self.as_str())
-    }
-
-    pub fn all() -> &'static [ProviderKind] {
-        &[
-            ProviderKind::OpenAI,
-            ProviderKind::Anthropic,
-            ProviderKind::Google,
-            ProviderKind::OpenRouter,
-            ProviderKind::Ollama,
-        ]
     }
 }
 
@@ -82,5 +69,15 @@ impl ProviderConfig {
 
     pub fn api_key(&self) -> Option<&str> {
         self.api_key.as_deref()
+    }
+}
+
+pub fn create_client(config: &ProviderConfig) -> Result<Box<dyn EngineLlmProvider>, CliError> {
+    match config.kind {
+        ProviderKind::OpenAI => Ok(Box::new(OpenAIClient::new(config)?)),
+        ProviderKind::Anthropic => Ok(Box::new(AnthropicClient::new(config)?)),
+        ProviderKind::Google => Ok(Box::new(GoogleClient::new(config)?)),
+        ProviderKind::Ollama => Ok(Box::new(OllamaClient::new(config)?)),
+        ProviderKind::OpenRouter => Ok(Box::new(OpenRouterClient::new(config)?)),
     }
 }

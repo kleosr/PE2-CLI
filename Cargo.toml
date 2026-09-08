@@ -4,7 +4,6 @@ members = [
     "crates/pe2-providers",
     "crates/pe2-tui",
     "crates/pe2-cli",
-    "crates/pe2-bindings",
 ]
 resolver = "2"
 

@@ -117,25 +117,23 @@ fn test_validate_prompt_rejects_too_long() {
 
 #[test]
 fn test_validate_and_suggest_command_accepts_help() {
-    use pe2_core::validation::validate_and_suggest_command;
-    let v = validate_and_suggest_command("/help");
-    assert!(v.is_valid(), "/help should be valid");
-    assert!(v.is_command(), "/help should be recognized as command");
+    use pe2_core::validation::{validate_and_suggest_command, CommandValidation};
+    assert_eq!(
+        validate_and_suggest_command("/help"),
+        CommandValidation::Valid
+    );
 }
 
 #[test]
 fn test_validate_and_suggest_command_rejects_unknown() {
-    use pe2_core::validation::validate_and_suggest_command;
-    let v = validate_and_suggest_command("/setings");
-    assert!(!v.is_valid(), "typo should be invalid");
-    assert!(
-        v.is_command(),
-        "should still be recognized as command attempt"
-    );
-    assert!(
-        v.suggestion().is_some(),
-        "should have a suggestion for typo"
-    );
+    use pe2_core::validation::{validate_and_suggest_command, CommandValidation};
+    match validate_and_suggest_command("/setings") {
+        CommandValidation::Unknown {
+            suggestion: Some(_),
+            ..
+        } => {}
+        other => panic!("expected unknown with suggestion, got {other:?}"),
+    }
 }
 
 #[test]
@@ -191,29 +189,34 @@ fn test_preferences_defaults() {
     use pe2_core::preferences::UserPreferences;
     let dir = TempDir::new().unwrap();
     let prefs = UserPreferences::from_path(dir.path().join("preferences.json"));
-    assert_eq!(prefs.theme(), "default");
-    assert!(!prefs.compact());
     assert!(prefs.track_usage());
 }
 
 #[test]
-fn test_preferences_setters() {
+fn test_preferences_loads_track_usage() {
     use pe2_core::preferences::UserPreferences;
     let dir = TempDir::new().unwrap();
-    let mut prefs = UserPreferences::from_path(dir.path().join("preferences.json"));
-    prefs.set_theme("dark".to_string());
-    assert_eq!(prefs.theme(), "dark");
-    prefs.set_compact(true);
-    assert!(prefs.compact());
-    prefs.set_track_usage(false);
+    let path = dir.path().join("preferences.json");
+    std::fs::write(&path, r#"{"track_usage":false}"#).unwrap();
+    let prefs = UserPreferences::from_path(path);
     assert!(!prefs.track_usage());
 }
 
 #[test]
-fn test_session_manager_new() {
-    use pe2_core::session::SessionStore;
-    let sm = SessionStore::new();
-    assert!(!sm.session_id().is_empty());
+fn test_session_store_records_entries() {
+    use pe2_core::session::{SessionEntry, SessionStore};
+    let mut store = SessionStore::new();
+    store.add_entry(SessionEntry {
+        prompt: "hello world prompt".to_string(),
+        output: "out.md".to_string(),
+        model: "gpt-4o-mini".to_string(),
+        provider: "openai".to_string(),
+        difficulty: "simple".to_string(),
+        score: 1,
+        timestamp: "2026-01-01T00:00:00Z".to_string(),
+    });
+    assert_eq!(store.entries.len(), 1);
+    assert_eq!(store.entries[0].provider, "openai");
 }
 
 #[test]
@@ -235,16 +238,11 @@ fn test_stats_record_usage_increments() {
 }
 
 #[test]
-fn test_default_model_for_provider() {
-    use pe2_core::constants::{default_model_for_provider, models_for_provider};
-    assert!(!default_model_for_provider("openai").is_empty());
-    assert!(!default_model_for_provider("anthropic").is_empty());
-    assert!(!default_model_for_provider("google").is_empty());
-    assert!(!default_model_for_provider("openrouter").is_empty());
-    assert!(!default_model_for_provider("ollama").is_empty());
-    assert!(!default_model_for_provider("unknown").is_empty());
-    assert!(!models_for_provider("openai").is_empty());
-    assert!(models_for_provider("openai").contains(&"gpt-4o-mini"));
+fn test_provider_env_var() {
+    use pe2_core::constants::provider_env_var;
+    assert_eq!(provider_env_var("openai"), "OPENAI_API_KEY");
+    assert_eq!(provider_env_var("ollama"), "OLLAMA_BASE_URL");
+    assert_eq!(provider_env_var("unknown"), "OPENROUTER_API_KEY");
 }
 
 struct MockProvider {
@@ -461,7 +459,7 @@ fn test_structured_prompt_from_json() {
         "constraints": "constraints",
         "output": "output"
     }"#;
-    let sp = StructuredPrompt::from_json(json).unwrap();
+    let sp: StructuredPrompt = serde_json::from_str(json).unwrap();
     assert_eq!(sp.context, "ctx");
     assert_eq!(sp.role, "role");
 }
@@ -477,7 +475,7 @@ fn test_structured_prompt_to_json_roundtrip() {
         output: "o".to_string(),
     };
     let json = sp.to_json_pretty().unwrap();
-    let parsed = StructuredPrompt::from_json(&json).unwrap();
+    let parsed: StructuredPrompt = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed.context, "c");
     assert_eq!(parsed.role, "r");
     assert_eq!(parsed.task, "t");

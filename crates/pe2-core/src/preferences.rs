@@ -1,28 +1,29 @@
 use crate::config::preferences_file_path;
-use crate::json_store::JsonStore;
+use crate::write_atomic;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserPrefs {
-    pub theme: String,
-    pub compact: bool,
+    #[serde(default = "default_track_usage")]
     pub track_usage: bool,
+}
+
+fn default_track_usage() -> bool {
+    true
 }
 
 impl Default for UserPrefs {
     fn default() -> Self {
         Self {
-            theme: "default".to_string(),
-            compact: false,
-            track_usage: true,
+            track_usage: default_track_usage(),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct UserPreferences {
-    store: JsonStore<UserPrefs>,
+    prefs: UserPrefs,
 }
 
 impl UserPreferences {
@@ -32,35 +33,12 @@ impl UserPreferences {
 
     pub fn from_path(path: PathBuf) -> Self {
         Self {
-            store: JsonStore::load_or_default(path),
+            prefs: write_atomic::read_json_or_default(&path),
         }
     }
 
-    pub fn theme(&self) -> &str {
-        &self.store.snapshot().theme
-    }
-
-    pub fn compact(&self) -> bool {
-        self.store.snapshot().compact
-    }
-
     pub fn track_usage(&self) -> bool {
-        self.store.snapshot().track_usage
-    }
-
-    pub fn set_theme(&mut self, theme: String) {
-        self.store.snapshot_mut().theme = theme;
-        self.store.persist_best_effort();
-    }
-
-    pub fn set_compact(&mut self, compact: bool) {
-        self.store.snapshot_mut().compact = compact;
-        self.store.persist_best_effort();
-    }
-
-    pub fn set_track_usage(&mut self, track: bool) {
-        self.store.snapshot_mut().track_usage = track;
-        self.store.persist_best_effort();
+        self.prefs.track_usage
     }
 }
 

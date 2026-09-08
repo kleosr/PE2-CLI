@@ -134,10 +134,6 @@ fn fallback_prompt(raw_prompt: &str) -> StructuredPrompt {
 }
 
 impl StructuredPrompt {
-    pub fn from_json(json: &str) -> Result<Self, CliError> {
-        Ok(serde_json::from_str(json)?)
-    }
-
     pub fn to_json_pretty(&self) -> Result<String, CliError> {
         serde_json::to_string_pretty(self).map_err(CliError::Json)
     }

@@ -8,7 +8,6 @@ description.workspace = true
 
 [dependencies]
 pe2-core = { path = "../pe2-core" }
-serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }

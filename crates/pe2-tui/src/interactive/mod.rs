@@ -107,8 +107,8 @@ impl InteractiveSession {
     ) -> Result<bool, CliError> {
         match cmd {
             SlashCommand::Help => print_info(HELP_TEXT),
-            SlashCommand::Config => slash_commands::edit_config(&mut self.config).await?,
-            SlashCommand::Session => slash_commands::show_session(&self.session_store).await,
+            SlashCommand::Config => slash_commands::edit_config(&mut self.config)?,
+            SlashCommand::Session => slash_commands::show_session(&self.session_store),
             SlashCommand::Prefs => slash_commands::show_preferences(&self.preferences),
             SlashCommand::Stats => slash_commands::show_stats(&self.stats),
             SlashCommand::Clear => {
