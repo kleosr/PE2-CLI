@@ -1,6 +1,6 @@
-use crate::config::stats_file_path;
+use crate::config::{ensure_config_dir, stats_file_path};
 use crate::errors::CliError;
-use crate::json_store::JsonStore;
+use crate::write_atomic;
 use chrono::{Local, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -18,7 +18,8 @@ pub struct UsageStats {
 
 #[derive(Debug)]
 pub struct StatsTracker {
-    store: JsonStore<UsageStats>,
+    stats: UsageStats,
+    path: PathBuf,
 }
 
 impl StatsTracker {
@@ -28,38 +29,49 @@ impl StatsTracker {
 
     pub fn from_path(path: PathBuf) -> Self {
         Self {
-            store: JsonStore::load_or_default(path),
+            stats: write_atomic::read_json_or_default(&path),
+            path,
         }
     }
 
     pub fn record_usage(&mut self, provider: &str, complexity_score: Option<u32>) {
-        let stats = self.store.snapshot_mut();
-        stats.total_prompts += 1;
+        self.stats.total_prompts += 1;
         if let Some(score) = complexity_score {
-            let n = stats.total_prompts as f64;
-            stats.running_avg_complexity = if n > 1.0 {
-                ((n - 1.0) / n) * stats.running_avg_complexity + (1.0 / n) * score as f64
+            let n = self.stats.total_prompts as f64;
+            self.stats.running_avg_complexity = if n > 1.0 {
+                ((n - 1.0) / n) * self.stats.running_avg_complexity + (1.0 / n) * score as f64
             } else {
                 score as f64
             };
         }
         let today = Local::now().format("%Y-%m-%d").to_string();
-        *stats.daily_usage.entry(today).or_insert(0) += 1;
-        *stats
+        *self.stats.daily_usage.entry(today).or_insert(0) += 1;
+        *self
+            .stats
             .provider_usage
             .entry(provider.to_string())
             .or_insert(0) += 1;
-        stats.last_updated = Utc::now().to_rfc3339();
-        prune_daily_usage(stats);
-        self.store.persist_best_effort();
+        self.stats.last_updated = Utc::now().to_rfc3339();
+        prune_daily_usage(&mut self.stats);
+        self.persist_best_effort();
     }
 
     pub fn save(&self) -> Result<(), CliError> {
-        self.store.persist()
+        ensure_config_dir()?;
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        write_atomic::write_json_atomic(&self.path, &self.stats)
     }
 
     pub fn usage(&self) -> &UsageStats {
-        self.store.snapshot()
+        &self.stats
+    }
+
+    fn persist_best_effort(&self) {
+        if let Err(e) = self.save() {
+            tracing::warn!("failed to persist {}: {e}", self.path.display());
+        }
     }
 }
 
