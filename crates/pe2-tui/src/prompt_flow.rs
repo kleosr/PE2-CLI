@@ -29,4 +29,7 @@ pub fn render_generation_result(result: &PipelineResult) {
     print_prompt_result(&result.prompt, &result.output_file);
     print_refinement_history(&result.history);
     print_metrics(&result.analysis, result.history.len());
+    if let Some(note) = &result.refinement_note {
+        print_info(&format!("Refinement note: {note}"));
+    }
 }
