@@ -52,10 +52,6 @@ pub fn stats_file_path() -> PathBuf {
     config_dir().join("stats.json")
 }
 
-pub fn sessions_dir_path() -> PathBuf {
-    config_dir().join("sessions")
-}
-
 pub fn ensure_config_dir() -> std::io::Result<()> {
     std::fs::create_dir_all(config_dir())
 }

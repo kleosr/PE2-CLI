@@ -23,14 +23,15 @@ pub async fn run_prompt_input(
             .await?;
 
     render_generation_result(&result);
-    persist_prompt_outcome(state, raw_prompt, &result).await
+    persist_prompt_outcome(state, raw_prompt, &result);
+    Ok(())
 }
 
-async fn persist_prompt_outcome(
+fn persist_prompt_outcome(
     state: &mut InteractiveSession,
     raw_prompt: &str,
     result: &pe2_core::engine::PipelineResult,
-) -> Result<(), CliError> {
+) {
     state
         .session_store
         .add_entry(pe2_core::session::SessionEntry {
@@ -41,16 +42,11 @@ async fn persist_prompt_outcome(
             difficulty: result.analysis.difficulty.label().to_string(),
             score: result.analysis.score,
             timestamp: chrono::Utc::now().to_rfc3339(),
-        })
-        .await;
-    state.session_store.save().await?;
+        });
 
     if state.preferences.track_usage() {
         state
             .stats
             .record_usage(&state.config.provider, Some(result.analysis.score));
-        state.stats.save()?;
     }
-
-    Ok(())
 }
