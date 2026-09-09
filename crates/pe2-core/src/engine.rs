@@ -31,10 +31,12 @@ pub fn build_messages(system_content: &str, user_content: &str) -> Vec<Message> 
     ]
 }
 
+fn cwd_or_dot() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
 fn local_prompts_dir() -> PathBuf {
-    std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("pe2-prompts")
+    cwd_or_dot().join("pe2-prompts")
 }
 
 fn rejects_traversal(path: &Path) -> bool {
@@ -49,9 +51,7 @@ pub fn resolve_output_file(
         let path = if PathBuf::from(file).is_absolute() {
             PathBuf::from(file)
         } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(file)
+            cwd_or_dot().join(file)
         };
         if rejects_traversal(&path) {
             return Err(std::io::Error::new(
@@ -75,42 +75,22 @@ pub struct StructuredPrompt {
     pub output: String,
 }
 
-fn fill_empty_fields(parsed: StructuredPrompt) -> StructuredPrompt {
-    StructuredPrompt {
-        context: if parsed.context.is_empty() {
-            "No context provided".to_string()
-        } else {
-            parsed.context
-        },
-        role: if parsed.role.is_empty() {
-            "Expert assistant".to_string()
-        } else {
-            parsed.role
-        },
-        task: if parsed.task.is_empty() {
-            "Complete the requested task".to_string()
-        } else {
-            parsed.task
-        },
-        constraints: if parsed.constraints.is_empty() {
-            "Follow best practices".to_string()
-        } else {
-            parsed.constraints
-        },
-        output: if parsed.output.is_empty() {
-            "Provide appropriate output".to_string()
-        } else {
-            parsed.output
-        },
+fn or_default(value: String, default: &str) -> String {
+    if value.is_empty() {
+        default.to_string()
+    } else {
+        value
     }
 }
 
-fn has_all_fields(prompt: &StructuredPrompt) -> bool {
-    !prompt.context.is_empty()
-        && !prompt.role.is_empty()
-        && !prompt.task.is_empty()
-        && !prompt.constraints.is_empty()
-        && !prompt.output.is_empty()
+fn fill_empty_fields(parsed: StructuredPrompt) -> StructuredPrompt {
+    StructuredPrompt {
+        context: or_default(parsed.context, "No context provided"),
+        role: or_default(parsed.role, "Expert assistant"),
+        task: or_default(parsed.task, "Complete the requested task"),
+        constraints: or_default(parsed.constraints, "Follow best practices"),
+        output: or_default(parsed.output, "Provide appropriate output"),
+    }
 }
 
 fn extract_json_object(content: &str) -> &str {
@@ -140,9 +120,6 @@ impl StructuredPrompt {
 
     pub fn from_llm_response(content: &str, raw_prompt: &str) -> Result<(Self, String), CliError> {
         if let Ok(parsed) = serde_json::from_str::<Self>(content) {
-            if has_all_fields(&parsed) {
-                return Ok((parsed, FIELD_VALIDATION_EDITS.to_string()));
-            }
             return Ok((
                 fill_empty_fields(parsed),
                 FIELD_VALIDATION_EDITS.to_string(),
@@ -273,17 +250,17 @@ impl Pipeline {
             edits: initial.edits,
         });
 
-        for i in 1..iterations {
-            match self.refine((i + 1) as u32).await {
+        for iteration in 2..=(iterations as u32) {
+            match self.refine(iteration).await {
                 Ok(r) => {
                     self.current_prompt = Some(r.prompt);
                     self.history.push(RefinementEntry {
-                        iteration: (i + 1) as u32,
+                        iteration,
                         edits: r.edits,
                     });
                 }
                 Err(e) => {
-                    tracing::warn!("Refinement {} failed: {}", i + 1, e);
+                    tracing::warn!("Refinement {iteration} failed: {e}");
                     self.refinement_note = Some(e.to_string());
                     break;
                 }

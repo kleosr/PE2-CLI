@@ -1,8 +1,6 @@
 use super::InteractiveSession;
 use crate::display::print_error;
-use crate::prompt_flow::{
-    generate_prompt_with_spinner, render_complexity_preflight, render_generation_result,
-};
+use crate::prompt_flow::generate_and_render;
 use pe2_core::errors::CliError;
 use pe2_core::validation;
 
@@ -15,14 +13,8 @@ pub async fn run_prompt_input(
         return Ok(());
     }
 
-    let analysis = pe2_core::analysis::analyze_prompt_complexity(raw_prompt);
-    render_complexity_preflight(&analysis, &state.config.provider, &state.config.model);
-
     let result =
-        generate_prompt_with_spinner(state.config.clone(), state.pipeline_options, raw_prompt)
-            .await?;
-
-    render_generation_result(&result);
+        generate_and_render(state.config.clone(), state.pipeline_options, raw_prompt).await?;
     persist_prompt_outcome(state, raw_prompt, &result);
     Ok(())
 }

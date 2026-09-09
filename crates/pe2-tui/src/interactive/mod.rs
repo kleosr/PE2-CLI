@@ -14,10 +14,7 @@ use pe2_core::errors::CliError;
 use pe2_core::preferences::UserPreferences;
 use pe2_core::session::SessionStore;
 use pe2_core::stats::StatsTracker;
-use pe2_core::validation::{
-    resolve_slash_command, unknown_command_message, validate_and_suggest_command,
-    CommandValidation, SlashCommand,
-};
+use pe2_core::validation::{resolve_slash_command, unknown_command_message, SlashCommand};
 use std::io::{self, Write};
 
 const HELP_TEXT: &str = r#"
@@ -85,13 +82,10 @@ impl InteractiveSession {
             }
 
             if input.starts_with('/') {
-                let validation = validate_and_suggest_command(input);
-                if matches!(validation, CommandValidation::Unknown { .. }) {
-                    if let Some(msg) = unknown_command_message(&validation) {
-                        print_error(&msg);
-                    }
-                    continue;
+                if let Some(msg) = unknown_command_message(input) {
+                    print_error(&msg);
                 }
+                continue;
             }
 
             prompt::run_prompt_input(self, input).await?;

@@ -15,13 +15,12 @@ Banner, display, `prompt_flow`, interactive REPL. Generation via `pe2_providers:
 | Interactive | `src/interactive/mod.rs` | REPL dispatch; takes `PipelineRunOptions` from CLI |
 | Slash commands | `src/interactive/slash_commands.rs` | `/config` editor, session/prefs/stats views |
 | Prompt input | `src/interactive/prompt.rs` | One-shot generation inside REPL; in-memory session + stats |
-| Display | `src/display.rs` | Themed output / metrics |
-| Theme | `src/theme.rs` | `PE2_THEME` fn-palette |
+| Display | `src/display.rs` | Colored output / metrics |
 | Banner | `src/banner.rs` | ASCII banner, `TAGLINE` |
 
 ## Notes
 
-- Unknown `/…` input uses `validate_and_suggest_command`
+- Unknown `/…` input uses `unknown_command_message`
 - Session API keys are in-memory only (`config.json` does not serialize `api_key`)
 
 ## Tests

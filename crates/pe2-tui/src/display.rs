@@ -1,4 +1,3 @@
-use crate::theme::{styled_label, styled_value, PE2_THEME};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use pe2_core::analysis::ComplexityResult;
@@ -12,7 +11,7 @@ pub fn print_complexity_analysis(analysis: &ComplexityResult) {
     println!(
         "  {} {}: {} {} ({} iterations)",
         "◇".bright_blue(),
-        styled_label("Difficulty"),
+        "Difficulty".bright_blue(),
         analysis.difficulty.emoji(),
         analysis.difficulty.label().bold(),
         analysis.iterations,
@@ -20,26 +19,27 @@ pub fn print_complexity_analysis(analysis: &ComplexityResult) {
     println!(
         "  {} {}: {}",
         "◇".bright_blue(),
-        styled_label("Complexity Score"),
-        styled_value(&format!(
+        "Complexity Score".bright_blue(),
+        format!(
             "{}/{}",
             analysis.score,
             pe2_core::constants::COMPLEXITY_SCORE_MAX
-        )),
+        )
+        .white(),
     );
     println!(
         "  {} {}: {} words",
         "◇".bright_blue(),
-        styled_label("Word Count"),
-        styled_value(&analysis.word_count.to_string()),
+        "Word Count".bright_blue(),
+        analysis.word_count.to_string().white(),
     );
     println!();
 }
 
 fn print_prompt_field(prefix: &str, label: &str, value: &str) {
-    println!("  {} {}", prefix, styled_label(label));
+    println!("  {} {}", prefix, label.bright_blue());
     for line in value.lines() {
-        println!("  {} {}", "│  ".dimmed(), styled_value(line));
+        println!("  {} {}", "│  ".dimmed(), line.white());
     }
     println!();
 }
@@ -56,7 +56,7 @@ pub fn print_prompt_result(prompt: &StructuredPrompt, output_file: &str) {
     print_prompt_field("├─", "Task:", &prompt.task);
     print_prompt_field("├─", "Constraints:", &prompt.constraints);
     print_prompt_field("├─", "Output:", &prompt.output);
-    println!("  {} {}", "└─".dimmed(), styled_label("Saved to:"));
+    println!("  {} {}", "└─".dimmed(), "Saved to:".bright_blue());
     println!(
         "  {}   {}",
         " ".dimmed(),
@@ -71,18 +71,18 @@ pub fn print_refinement_history(history: &[RefinementEntry]) {
     }
     println!(
         "  {} {}",
-        (PE2_THEME.primary)("◆".to_string()),
-        (PE2_THEME.highlight)("Refinement History".to_string())
+        "◆".bright_cyan(),
+        "Refinement History".bright_white().bold()
     );
     for entry in history {
         let label = format!("Iteration {}", entry.iteration);
         let short = entry.edits.chars().take(120).collect::<String>();
         println!(
             "  {} {} {} {}",
-            (PE2_THEME.muted)(" ".to_string()),
-            (PE2_THEME.secondary)(label),
-            (PE2_THEME.muted)("·".to_string()),
-            (PE2_THEME.muted)(short),
+            " ".dimmed(),
+            label.bright_magenta(),
+            "·".dimmed(),
+            short.dimmed(),
         );
     }
     println!();
@@ -97,31 +97,27 @@ pub fn print_metrics(analysis: &ComplexityResult, iterations: usize) {
         .add_row(vec!["Complexity Score", &analysis.score.to_string()])
         .add_row(vec!["Iterations", &iterations.to_string()]);
 
-    println!("  {}", (PE2_THEME.highlight)("Run Metrics".to_string()));
+    println!("  {}", "Run Metrics".bright_white().bold());
     for line in table.to_string().lines() {
-        println!(
-            "  {} {}",
-            (PE2_THEME.muted)(" ".to_string()),
-            (PE2_THEME.muted)(line.to_string())
-        );
+        println!("  {} {}", " ".dimmed(), line.dimmed());
     }
     println!();
 }
 
 pub fn print_error(msg: &str) {
-    eprintln!("  ✖ {}", (PE2_THEME.error)(msg.to_string()));
+    eprintln!("  ✖ {}", msg.bright_red());
 }
 
 pub fn print_success(msg: &str) {
-    println!("  ✔ {}", (PE2_THEME.success)(msg.to_string()));
+    println!("  ✔ {}", msg.bright_green());
 }
 
 pub fn print_info(msg: &str) {
-    println!("  ℹ {}", (PE2_THEME.primary)(msg.to_string()));
+    println!("  ℹ {}", msg.bright_cyan());
 }
 
 pub fn print_separator() {
-    println!("  {}", (PE2_THEME.border)("─".repeat(60)));
+    println!("  {}", "─".repeat(60).dimmed());
 }
 
 pub fn create_spinner(msg: &str) -> Result<ProgressBar, CliError> {

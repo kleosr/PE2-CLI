@@ -66,10 +66,6 @@ impl ProviderConfig {
         self.base_url = Some(url);
         self
     }
-
-    pub fn api_key(&self) -> Option<&str> {
-        self.api_key.as_deref()
-    }
 }
 
 pub fn create_client(config: &ProviderConfig) -> Result<Box<dyn EngineLlmProvider>, CliError> {

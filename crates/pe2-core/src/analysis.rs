@@ -63,15 +63,7 @@ fn word_score(word_count: usize) -> u32 {
     }
 }
 
-struct PatternScores {
-    tech: u32,
-    domain: u32,
-    structural: u32,
-    logic: u32,
-    special: u32,
-}
-
-fn pattern_scores(raw_prompt: &str, prompt_lower: &str) -> PatternScores {
+fn pattern_scores(raw_prompt: &str, prompt_lower: &str) -> u32 {
     let tech = constants::TECH_PATTERNS
         .iter()
         .filter(|r| r.is_match(raw_prompt))
@@ -100,13 +92,7 @@ fn pattern_scores(raw_prompt: &str, prompt_lower: &str) -> PatternScores {
     } else {
         0
     };
-    PatternScores {
-        tech,
-        domain,
-        structural,
-        logic,
-        special,
-    }
+    tech + domain + structural + logic + special
 }
 
 fn difficulty_from_score(score: u32) -> (Difficulty, u32) {
@@ -126,13 +112,7 @@ fn difficulty_from_score(score: u32) -> (Difficulty, u32) {
 pub fn analyze_prompt_complexity(raw_prompt: &str) -> ComplexityResult {
     let word_count = raw_prompt.split_whitespace().count();
     let prompt_lower = raw_prompt.to_lowercase();
-    let patterns = pattern_scores(raw_prompt, &prompt_lower);
-    let score = (word_score(word_count)
-        + patterns.tech
-        + patterns.domain
-        + patterns.structural
-        + patterns.logic
-        + patterns.special)
+    let score = (word_score(word_count) + pattern_scores(raw_prompt, &prompt_lower))
         .min(constants::COMPLEXITY_SCORE_MAX);
     let (difficulty, iterations) = difficulty_from_score(score);
     ComplexityResult {
