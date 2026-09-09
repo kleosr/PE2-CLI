@@ -33,3 +33,15 @@ pub fn render_generation_result(result: &PipelineResult) {
         print_info(&format!("Refinement note: {note}"));
     }
 }
+
+pub async fn generate_and_render(
+    cfg: Config,
+    options: PipelineRunOptions,
+    raw_prompt: &str,
+) -> Result<PipelineResult, CliError> {
+    let analysis = pe2_core::analysis::analyze_prompt_complexity(raw_prompt);
+    render_complexity_preflight(&analysis, &cfg.provider, &cfg.model);
+    let result = generate_prompt_with_spinner(cfg, options, raw_prompt).await?;
+    render_generation_result(&result);
+    Ok(result)
+}

@@ -8,9 +8,7 @@ fn bearer_value(api_key: &str) -> Result<HeaderValue, CliError> {
 }
 
 pub fn build_openrouter_headers(api_key: &str) -> Result<HeaderMap, CliError> {
-    let mut headers = HeaderMap::new();
-    headers.insert(AUTHORIZATION, bearer_value(api_key)?);
-    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    let mut headers = build_bearer_header(api_key)?;
     headers.insert(REFERER, HeaderValue::from_static(constants::HTTP_REFERER));
     headers.insert("X-Title", HeaderValue::from_static(constants::HTTP_TITLE));
     Ok(headers)

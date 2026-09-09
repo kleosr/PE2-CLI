@@ -1,4 +1,4 @@
-use crate::config::{ensure_config_dir, stats_file_path};
+use crate::config::stats_file_path;
 use crate::errors::CliError;
 use crate::write_atomic;
 use chrono::{Local, Utc};
@@ -57,7 +57,6 @@ impl StatsTracker {
     }
 
     pub fn save(&self) -> Result<(), CliError> {
-        ensure_config_dir()?;
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }

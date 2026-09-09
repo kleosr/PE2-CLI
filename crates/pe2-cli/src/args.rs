@@ -1,29 +1,23 @@
 use clap::Parser;
 use pe2_core::constants::{LLM_MAX_TOKENS, LLM_TEMPERATURE};
-use pe2_tui::banner::TAGLINE;
 
-fn long_help() -> &'static str {
-    static HELP: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    HELP.get_or_init(|| {
-        format!(
-            "PE²-CLI: {TAGLINE}\n\n\
-             Takes a rough prompt (text or file), calls a configured LLM,\n\
-             and returns a structured PE²-style prompt with refinement iterations.\n\n\
-             Examples:\n\
-               pe2 \"Write a blog post about AI\"\n\
-               pe2 --config\n\
-               pe2 --provider openai --model gpt-4o-mini \"My prompt\"\n\
-               pe2 -o output.md \"Save to file\""
-        )
-    })
-}
+const LONG_HELP: &str = "PE²-CLI: Structured Prompt Generation v4 — KleoSr Pro Edition
+
+Takes a rough prompt (text or file), calls a configured LLM,
+and returns a structured PE²-style prompt with refinement iterations.
+
+Examples:
+  pe2 \"Write a blog post about AI\"
+  pe2 --config
+  pe2 --provider openai --model gpt-4o-mini \"My prompt\"
+  pe2 -o output.md \"Save to file\"";
 
 #[derive(Parser, Debug)]
 #[command(
     name = "pe2",
     version = env!("CARGO_PKG_VERSION"),
     about = "Convert raw prompts to PE²-structured optimized prompts",
-    long_about = long_help()
+    long_about = LONG_HELP
 )]
 pub struct Args {
     #[arg(help = "Raw prompt text or path to prompt file (omit for interactive mode)")]
