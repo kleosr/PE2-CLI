@@ -57,53 +57,20 @@ pub fn validate_prompt(prompt: &str) -> Option<String> {
     None
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CommandValidation {
-    NotCommand,
-    Valid,
-    Unknown {
-        command: String,
-        suggestion: Option<&'static str>,
-    },
+pub fn suggest_slash_command(input: &str) -> Option<&'static str> {
+    let token = input.split_whitespace().next()?;
+    if !token.starts_with('/') || resolve_slash_command(input).is_some() {
+        return None;
+    }
+    known_slash_tokens().min_by_key(|known| str_similarity(token, known))
 }
 
-pub fn unknown_command_message(validation: &CommandValidation) -> Option<String> {
-    match validation {
-        CommandValidation::Unknown {
-            command,
-            suggestion: Some(hint),
-        } => Some(format!(
-            "Unknown command: {command}. Did you mean {hint}? Type /help for available commands."
-        )),
-        CommandValidation::Unknown { command, .. } => Some(format!(
-            "Unknown command: {command}. Type /help for available commands."
-        )),
-        _ => None,
-    }
-}
-
-pub fn validate_and_suggest_command(command: &str) -> CommandValidation {
-    if !command
-        .split_whitespace()
-        .next()
-        .is_some_and(|t| t.starts_with('/'))
-    {
-        return CommandValidation::NotCommand;
-    }
-
-    if resolve_slash_command(command).is_some() {
-        return CommandValidation::Valid;
-    }
-
-    let Some(cmd) = command.split_whitespace().next().map(str::to_string) else {
-        return CommandValidation::NotCommand;
-    };
-    let suggestion = known_slash_tokens().min_by_key(|known| str_similarity(&cmd, known));
-
-    CommandValidation::Unknown {
-        command: cmd,
-        suggestion,
-    }
+pub fn unknown_command_message(input: &str) -> Option<String> {
+    let token = input.split_whitespace().next()?;
+    let hint = suggest_slash_command(input)?;
+    Some(format!(
+        "Unknown command: {token}. Did you mean {hint}? Type /help for available commands."
+    ))
 }
 
 fn known_slash_tokens() -> impl Iterator<Item = &'static str> {
@@ -146,21 +113,27 @@ mod tests {
 
     #[test]
     fn test_command_validation() {
-        assert_eq!(
-            validate_and_suggest_command("/help"),
-            CommandValidation::Valid
-        );
+        assert_eq!(suggest_slash_command("/help"), None);
     }
 
     #[test]
     fn test_tui_aliases_are_known() {
         for cmd in ["/h", "/c", "/s", "/p", "/q"] {
             assert_eq!(
-                validate_and_suggest_command(cmd),
-                CommandValidation::Valid,
+                suggest_slash_command(cmd),
+                None,
                 "expected {cmd} to be valid"
             );
         }
+    }
+
+    #[test]
+    fn unknown_slash_command_suggests_closest_token() {
+        assert!(suggest_slash_command("/setings").is_some());
+        assert_eq!(suggest_slash_command("plain prompt"), None);
+        let msg = unknown_command_message("/setings").expect("message for unknown command");
+        assert!(msg.contains("Did you mean"));
+        assert_eq!(unknown_command_message("/help"), None);
     }
 
     #[test]

@@ -7,9 +7,7 @@ use pe2_core::errors::CliError;
 use pe2_tui::banner::print_banner;
 use pe2_tui::display::print_error;
 use pe2_tui::interactive::setup_and_run_interactive;
-use pe2_tui::prompt_flow::{
-    generate_prompt_with_spinner, render_complexity_preflight, render_generation_result,
-};
+use pe2_tui::prompt_flow::generate_and_render;
 use std::path::Path;
 
 #[tokio::main]
@@ -38,13 +36,12 @@ async fn run(args: Args) -> anyhow::Result<()> {
         )
         .init();
 
-    if args.config {
-        return setup_and_run_interactive(pipeline_options(&args))
-            .await
-            .map_err(Into::into);
-    }
-
-    let Some(prompt_arg) = args.prompt.as_ref() else {
+    let prompt_arg = if args.config {
+        None
+    } else {
+        args.prompt.as_ref()
+    };
+    let Some(prompt_arg) = prompt_arg else {
         return setup_and_run_interactive(pipeline_options(&args))
             .await
             .map_err(Into::into);
@@ -54,7 +51,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
 }
 
 fn load_prompt_text(prompt: &str) -> anyhow::Result<String> {
-    let text = if Path::new(prompt).exists() {
+    let text = if Path::new(prompt).is_file() {
         std::fs::read_to_string(prompt)
             .with_context(|| format!("Failed to read prompt file: {prompt}"))?
     } else {
@@ -66,11 +63,7 @@ fn load_prompt_text(prompt: &str) -> anyhow::Result<String> {
 async fn run_single_prompt(args: &Args, raw_prompt: &str) -> anyhow::Result<()> {
     print_banner();
     let cfg = build_config_from_args(args);
-    let analysis = pe2_core::analysis::analyze_prompt_complexity(raw_prompt);
-    render_complexity_preflight(&analysis, &cfg.provider, &cfg.model);
-
-    let result = generate_prompt_with_spinner(cfg, pipeline_options(args), raw_prompt).await?;
-    render_generation_result(&result);
+    generate_and_render(cfg, pipeline_options(args), raw_prompt).await?;
     Ok(())
 }
 
@@ -98,11 +91,6 @@ fn pipeline_options(args: &Args) -> PipelineRunOptions {
 }
 
 fn resolve_iterations(args: &Args) -> Option<u32> {
-    if args.iterations.is_some() {
-        args.iterations
-    } else if args.auto_difficulty {
-        None
-    } else {
-        Some(1)
-    }
+    args.iterations
+        .or(if args.auto_difficulty { None } else { Some(1) })
 }

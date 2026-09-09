@@ -8,36 +8,35 @@ use pe2_core::stats::StatsTracker;
 use std::io::{self, Write};
 
 pub fn edit_config(config: &mut Config) -> Result<(), CliError> {
-    print_config_header();
-    edit_provider_field(config)?;
-    edit_model_field(config)?;
-    edit_api_key_field(config)?;
-    save_edited_config(config)?;
-    Ok(())
-}
-
-fn print_config_header() {
     println!();
     print_info("Configuration (press Enter to keep current value):");
     print_separator();
+
+    if let Some(value) = read_line_with_default("Provider", &config.provider)? {
+        config.provider = value;
+    }
+    if let Some(value) = read_line_with_default("Model", &config.model)? {
+        config.model = value;
+    }
+    edit_api_key_field(config)?;
+
+    config::save_config(config)?;
+    print_success("Configuration saved!");
+    println!();
+    Ok(())
 }
 
-fn edit_provider_field(config: &mut Config) -> Result<(), CliError> {
-    prompt_field(
-        "Provider",
-        |cfg| &cfg.provider,
-        |cfg, value| cfg.provider = value,
-        config,
-    )
-}
-
-fn edit_model_field(config: &mut Config) -> Result<(), CliError> {
-    prompt_field(
-        "Model",
-        |cfg| &cfg.model,
-        |cfg, value| cfg.model = value,
-        config,
-    )
+fn read_line_with_default(label: &str, current: &str) -> Result<Option<String>, CliError> {
+    print!("  {} [{}]: ", label.bright_white(), current.dimmed());
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let value = input.trim();
+    if value.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(value.to_string()))
+    }
 }
 
 fn edit_api_key_field(config: &mut Config) -> Result<(), CliError> {
@@ -51,30 +50,6 @@ fn edit_api_key_field(config: &mut Config) -> Result<(), CliError> {
     io::stdin().read_line(&mut key)?;
     if !key.trim().is_empty() {
         config.api_key = Some(key.trim().to_string());
-    }
-    Ok(())
-}
-
-fn save_edited_config(config: &mut Config) -> Result<(), CliError> {
-    config::save_config(config)?;
-    print_success("Configuration saved!");
-    println!();
-    Ok(())
-}
-
-fn prompt_field(
-    label: &str,
-    get: fn(&Config) -> &String,
-    set: fn(&mut Config, String),
-    config: &mut Config,
-) -> Result<(), CliError> {
-    print!("  {} [{}]: ", label.bright_white(), get(config).dimmed());
-    io::stdout().flush()?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    let value = input.trim();
-    if !value.is_empty() {
-        set(config, value.to_string());
     }
     Ok(())
 }
