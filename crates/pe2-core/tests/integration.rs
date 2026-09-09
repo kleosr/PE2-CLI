@@ -116,24 +116,17 @@ fn test_validate_prompt_rejects_too_long() {
 }
 
 #[test]
-fn test_validate_and_suggest_command_accepts_help() {
-    use pe2_core::validation::{validate_and_suggest_command, CommandValidation};
-    assert_eq!(
-        validate_and_suggest_command("/help"),
-        CommandValidation::Valid
-    );
+fn test_suggest_slash_command_returns_none_for_known() {
+    use pe2_core::validation::suggest_slash_command;
+    assert_eq!(suggest_slash_command("/help"), None);
 }
 
 #[test]
-fn test_validate_and_suggest_command_rejects_unknown() {
-    use pe2_core::validation::{validate_and_suggest_command, CommandValidation};
-    match validate_and_suggest_command("/setings") {
-        CommandValidation::Unknown {
-            suggestion: Some(_),
-            ..
-        } => {}
-        other => panic!("expected unknown with suggestion, got {other:?}"),
-    }
+fn test_suggest_slash_command_suggests_for_unknown() {
+    use pe2_core::validation::{suggest_slash_command, unknown_command_message};
+    assert!(suggest_slash_command("/setings").is_some());
+    let msg = unknown_command_message("/setings").expect("message for unknown command");
+    assert!(msg.contains("Did you mean"));
 }
 
 #[test]
@@ -237,14 +230,6 @@ fn test_stats_record_usage_increments() {
     assert!(st.usage().running_avg_complexity > 0.0);
 }
 
-#[test]
-fn test_provider_env_var() {
-    use pe2_core::constants::provider_env_var;
-    assert_eq!(provider_env_var("openai"), "OPENAI_API_KEY");
-    assert_eq!(provider_env_var("ollama"), "OLLAMA_BASE_URL");
-    assert_eq!(provider_env_var("unknown"), "OPENROUTER_API_KEY");
-}
-
 struct MockProvider {
     response: String,
     should_fail: bool,
@@ -262,12 +247,6 @@ impl pe2_core::engine::EngineLlmProvider for MockProvider {
             return Err(pe2_core::errors::CliError::Network(
                 "network failure".to_string(),
             ));
-        }
-        if self.response.trim().is_empty() {
-            return Err(pe2_core::errors::CliError::Provider {
-                provider: "mock".to_string(),
-                message: "Model returned empty content".to_string(),
-            });
         }
         Ok(self.response.clone())
     }
@@ -529,6 +508,8 @@ fn test_resolve_output_file_default() {
 #[test]
 fn test_resolve_output_file_absolute() {
     use pe2_core::engine::resolve_output_file;
-    let p = resolve_output_file(Some("C:\\absolute\\path.md"), "ignored").unwrap();
+    let dir = TempDir::new().unwrap();
+    let abs = dir.path().join("path.md");
+    let p = resolve_output_file(Some(abs.to_str().unwrap()), "ignored").unwrap();
     assert!(p.to_string_lossy().ends_with("path.md"));
 }

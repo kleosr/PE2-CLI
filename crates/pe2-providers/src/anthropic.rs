@@ -14,7 +14,8 @@ pub struct AnthropicClient {
 impl AnthropicClient {
     pub fn new(config: &ProviderConfig) -> Result<Self, CliError> {
         let api_key = config
-            .api_key()
+            .api_key
+            .as_deref()
             .ok_or_else(|| CliError::Auth("Anthropic API key is required".to_string()))?;
         Ok(Self {
             client: build_http_client()?,

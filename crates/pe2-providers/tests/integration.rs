@@ -43,7 +43,7 @@ fn test_provider_config_new() {
 
     let cfg = ProviderConfig::new(ProviderKind::OpenAI, Some("sk-test".to_string()));
     assert_eq!(cfg.kind, ProviderKind::OpenAI);
-    assert_eq!(cfg.api_key(), Some("sk-test"));
+    assert_eq!(cfg.api_key.as_deref(), Some("sk-test"));
     assert!(cfg.base_url.is_none());
 }
 
@@ -61,7 +61,7 @@ fn test_provider_config_api_key_none() {
     use pe2_providers::client::{ProviderConfig, ProviderKind};
 
     let cfg = ProviderConfig::new(ProviderKind::OpenAI, None);
-    assert!(cfg.api_key().is_none());
+    assert!(cfg.api_key.as_deref().is_none());
 }
 
 #[test]
