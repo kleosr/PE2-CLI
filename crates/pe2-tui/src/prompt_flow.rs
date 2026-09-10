@@ -8,40 +8,37 @@ use pe2_core::engine::{PipelineResult, PipelineRunOptions};
 use pe2_core::errors::CliError;
 use pe2_providers::runner::run_pipeline;
 
-pub fn render_complexity_preflight(analysis: &ComplexityResult, provider: &str, model: &str) {
-    print_complexity_analysis(analysis);
-    print_info(&format!("Using {provider} / {model}"));
+pub fn render_complexity_preflight(a: &ComplexityResult, p: &str, m: &str) {
+    print_complexity_analysis(a);
+    print_info(&format!("Using {p} / {m}"));
 }
-
 pub async fn generate_prompt_with_spinner(
-    cfg: Config,
-    options: PipelineRunOptions,
-    raw_prompt: &str,
+    c: Config,
+    o: PipelineRunOptions,
+    r: &str,
 ) -> Result<PipelineResult, CliError> {
-    let spinner = create_spinner("Generating prompt...")?;
-    let result = run_pipeline(cfg, options, raw_prompt).await?;
-    spinner.finish_and_clear();
-    Ok(result)
+    let s = create_spinner("Generating prompt...")?;
+    let x = run_pipeline(c, o, r).await?;
+    s.finish_and_clear();
+    Ok(x)
 }
-
-pub fn render_generation_result(result: &PipelineResult) {
+pub fn render_generation_result(r: &PipelineResult) {
     print_success("Prompt generation complete!");
-    print_prompt_result(&result.prompt, &result.output_file);
-    print_refinement_history(&result.history);
-    print_metrics(&result.analysis, result.history.len());
-    if let Some(note) = &result.refinement_note {
-        print_info(&format!("Refinement note: {note}"));
+    print_prompt_result(&r.prompt, &r.output_file);
+    print_refinement_history(&r.history);
+    print_metrics(&r.analysis, r.history.len());
+    if let Some(n) = &r.refinement_note {
+        print_info(&format!("Refinement note: {n}"));
     }
 }
-
 pub async fn generate_and_render(
-    cfg: Config,
-    options: PipelineRunOptions,
-    raw_prompt: &str,
+    c: Config,
+    o: PipelineRunOptions,
+    r: &str,
 ) -> Result<PipelineResult, CliError> {
-    let analysis = pe2_core::analysis::analyze_prompt_complexity(raw_prompt);
-    render_complexity_preflight(&analysis, &cfg.provider, &cfg.model);
-    let result = generate_prompt_with_spinner(cfg, options, raw_prompt).await?;
-    render_generation_result(&result);
-    Ok(result)
+    let a = pe2_core::analysis::analyze_prompt_complexity(r);
+    render_complexity_preflight(&a, &c.provider, &c.model);
+    let x = generate_prompt_with_spinner(c, o, r).await?;
+    render_generation_result(&x);
+    Ok(x)
 }

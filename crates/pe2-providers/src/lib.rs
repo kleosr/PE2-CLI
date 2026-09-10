@@ -1,9 +1,4 @@
-pub mod anthropic;
+pub mod adapters;
 pub mod client;
-pub mod google;
-pub mod headers;
 pub mod http;
-pub mod ollama;
-pub mod openai;
-pub mod openrouter;
 pub mod runner;

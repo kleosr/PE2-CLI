@@ -66,23 +66,25 @@ fn test_provider_config_api_key_none() {
 
 #[test]
 fn test_build_bearer_header() {
-    use pe2_providers::headers::build_bearer_header;
+    use pe2_providers::adapters::headers;
+    use pe2_providers::client::ProviderKind;
 
-    let headers = build_bearer_header("sk-test-key").unwrap();
-    let auth = headers.get("Authorization").unwrap();
+    let h = headers(ProviderKind::OpenAI, "sk-test-key").unwrap();
+    let auth = h.get("Authorization").unwrap();
     assert_eq!(auth, "Bearer sk-test-key");
 }
 
 #[test]
 fn test_build_openrouter_headers() {
-    use pe2_providers::headers::build_openrouter_headers;
+    use pe2_providers::adapters::headers;
+    use pe2_providers::client::ProviderKind;
 
-    let headers = build_openrouter_headers("sk-or-key").unwrap();
-    let auth = headers.get("authorization").unwrap();
+    let h = headers(ProviderKind::OpenRouter, "sk-or-key").unwrap();
+    let auth = h.get("authorization").unwrap();
     assert_eq!(auth, "Bearer sk-or-key");
-    let referer = headers.get("referer");
+    let referer = h.get("referer");
     assert!(referer.is_some(), "should have referer header");
-    let title = headers.get("X-Title");
+    let title = h.get("X-Title");
     assert!(title.is_some(), "should have X-Title header");
 }
 
@@ -140,11 +142,12 @@ fn test_create_client_ollama_no_key_needed() {
 
 #[test]
 fn test_build_anthropic_headers() {
-    use pe2_providers::headers::build_anthropic_headers;
+    use pe2_providers::adapters::headers;
+    use pe2_providers::client::ProviderKind;
 
-    let headers = build_anthropic_headers("sk-ant-key").unwrap();
-    assert_eq!(headers.get("x-api-key").unwrap(), "sk-ant-key");
-    assert!(headers.get("anthropic-version").is_some());
+    let h = headers(ProviderKind::Anthropic, "sk-ant-key").unwrap();
+    assert_eq!(h.get("x-api-key").unwrap(), "sk-ant-key");
+    assert!(h.get("anthropic-version").is_some());
 }
 
 #[test]

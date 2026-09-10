@@ -4,41 +4,24 @@ use crate::prompt_flow::generate_and_render;
 use pe2_core::errors::CliError;
 use pe2_core::validation;
 
-pub async fn run_prompt_input(
-    state: &mut InteractiveSession,
-    raw_prompt: &str,
-) -> Result<(), CliError> {
-    if let Some(msg) = validation::validate_prompt(raw_prompt) {
-        print_error(&msg);
+pub async fn run_prompt_input(s: &mut InteractiveSession, r: &str) -> Result<(), CliError> {
+    if let Some(m) = validation::validate_prompt(r) {
+        print_error(&m);
         return Ok(());
     }
-
-    let result =
-        generate_and_render(state.config.clone(), state.pipeline_options, raw_prompt).await?;
-    persist_prompt_outcome(state, raw_prompt, &result);
-    Ok(())
-}
-
-fn persist_prompt_outcome(
-    state: &mut InteractiveSession,
-    raw_prompt: &str,
-    result: &pe2_core::engine::PipelineResult,
-) {
-    state
-        .session_store
-        .add_entry(pe2_core::session::SessionEntry {
-            prompt: raw_prompt.to_string(),
-            output: result.output_file.clone(),
-            model: state.config.model.clone(),
-            provider: state.config.provider.clone(),
-            difficulty: result.analysis.difficulty.label().to_string(),
-            score: result.analysis.score,
-            timestamp: chrono::Utc::now().to_rfc3339(),
-        });
-
-    if state.preferences.track_usage() {
-        state
-            .stats
-            .record_usage(&state.config.provider, Some(result.analysis.score));
+    let x = generate_and_render(s.config.clone(), s.pipeline_options, r).await?;
+    s.session_store.add_entry(pe2_core::session::SessionEntry {
+        prompt: r.to_string(),
+        output: x.output_file.clone(),
+        model: s.config.model.clone(),
+        provider: s.config.provider.clone(),
+        difficulty: x.analysis.difficulty.label().to_string(),
+        score: x.analysis.score,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+    });
+    if s.preferences.track_usage() {
+        s.stats
+            .record_usage(&s.config.provider, Some(x.analysis.score));
     }
+    Ok(())
 }

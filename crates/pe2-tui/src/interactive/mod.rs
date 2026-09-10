@@ -40,7 +40,6 @@ pub struct InteractiveSession {
     pub(crate) stats: StatsTracker,
     pub(crate) preferences: UserPreferences,
 }
-
 impl InteractiveSession {
     pub fn new(
         config: pe2_core::config::Config,
@@ -57,56 +56,44 @@ impl InteractiveSession {
             preferences,
         }
     }
-
     pub async fn run(&mut self) -> Result<(), CliError> {
         print_banner();
         let stdin = io::stdin();
-        let mut stdout = io::stdout();
-
+        let mut out = io::stdout();
         loop {
             print!("  {} ", ">>>".bright_green().bold());
-            stdout.flush()?;
-
+            out.flush()?;
             let mut input = String::new();
             stdin.read_line(&mut input)?;
-            let input = input.trim();
-            if input.is_empty() {
+            let i = input.trim();
+            if i.is_empty() {
                 continue;
             }
-
-            if let Some(cmd) = resolve_slash_command(input) {
-                if self.dispatch_slash_command(cmd, &mut stdout).await? {
+            if let Some(c) = resolve_slash_command(i) {
+                if self.dispatch(c, &mut out).await? {
                     break;
                 }
                 continue;
             }
-
-            if input.starts_with('/') {
-                if let Some(msg) = unknown_command_message(input) {
-                    print_error(&msg);
+            if i.starts_with('/') {
+                if let Some(m) = unknown_command_message(i) {
+                    print_error(&m);
                 }
                 continue;
             }
-
-            prompt::run_prompt_input(self, input).await?;
+            prompt::run_prompt_input(self, i).await?;
         }
-
         Ok(())
     }
-
-    async fn dispatch_slash_command(
-        &mut self,
-        cmd: SlashCommand,
-        stdout: &mut io::Stdout,
-    ) -> Result<bool, CliError> {
-        match cmd {
+    async fn dispatch(&mut self, c: SlashCommand, o: &mut io::Stdout) -> Result<bool, CliError> {
+        match c {
             SlashCommand::Help => print_info(HELP_TEXT),
             SlashCommand::Config => slash_commands::edit_config(&mut self.config)?,
             SlashCommand::Session => slash_commands::show_session(&self.session_store),
             SlashCommand::Prefs => slash_commands::show_preferences(&self.preferences),
             SlashCommand::Stats => slash_commands::show_stats(&self.stats),
             SlashCommand::Clear => {
-                execute!(stdout, Clear(ClearType::All), cursor::MoveTo(0, 0))?;
+                execute!(o, Clear(ClearType::All), cursor::MoveTo(0, 0))?;
                 print_banner_brief();
             }
             SlashCommand::Exit => {
@@ -117,23 +104,21 @@ impl InteractiveSession {
         Ok(false)
     }
 }
-
-pub async fn setup_and_run_interactive(options: PipelineRunOptions) -> Result<(), CliError> {
-    let cfg = config::load_config_or_default();
-    let mut interactive = InteractiveSession::new(
-        cfg,
-        options,
+pub async fn setup_and_run_interactive(o: PipelineRunOptions) -> Result<(), CliError> {
+    InteractiveSession::new(
+        config::load_config_or_default(),
+        o,
         SessionStore::new(),
         StatsTracker::new(),
         UserPreferences::new(),
-    );
-    interactive.run().await
+    )
+    .run()
+    .await
 }
 
 #[cfg(test)]
 mod tests {
     use pe2_core::validation::{resolve_slash_command, SlashCommand};
-
     #[test]
     fn slash_command_aliases_resolve() {
         assert_eq!(resolve_slash_command("/c"), Some(SlashCommand::Config));
