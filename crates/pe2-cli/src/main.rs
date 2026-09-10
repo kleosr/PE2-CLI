@@ -12,85 +12,59 @@ use std::path::Path;
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
-
-    if let Err(e) = run(args).await {
-        print_error(&format!("{}", e));
+    let a = Args::parse();
+    if let Err(e) = run(a).await {
+        print_error(&format!("{e}"));
         std::process::exit(exit_code(&e));
     }
 }
-
-fn exit_code(err: &anyhow::Error) -> i32 {
-    if let Some(cli_err) = err.downcast_ref::<CliError>() {
-        cli_err.exit_code()
-    } else {
-        1
-    }
+fn exit_code(e: &anyhow::Error) -> i32 {
+    e.downcast_ref::<CliError>()
+        .map(|c| c.exit_code())
+        .unwrap_or(1)
 }
-
-async fn run(args: Args) -> anyhow::Result<()> {
+async fn run(a: Args) -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
         )
         .init();
-
-    let prompt_arg = if args.config {
-        None
-    } else {
-        args.prompt.as_ref()
-    };
-    let Some(prompt_arg) = prompt_arg else {
-        return setup_and_run_interactive(pipeline_options(&args))
-            .await
-            .map_err(Into::into);
-    };
-    let prompt = load_prompt_text(prompt_arg)?;
-    run_single_prompt(&args, &prompt).await
-}
-
-fn load_prompt_text(prompt: &str) -> anyhow::Result<String> {
-    let text = if Path::new(prompt).is_file() {
-        std::fs::read_to_string(prompt)
-            .with_context(|| format!("Failed to read prompt file: {prompt}"))?
-    } else {
-        prompt.to_string()
-    };
-    Ok(text)
-}
-
-async fn run_single_prompt(args: &Args, raw_prompt: &str) -> anyhow::Result<()> {
+    if a.config || a.prompt.is_none() {
+        return setup_and_run_interactive(opt(&a)).await.map_err(Into::into);
+    }
+    let r = load(a.prompt.as_ref().unwrap())?;
     print_banner();
-    let cfg = build_config_from_args(args);
-    generate_and_render(cfg, pipeline_options(args), raw_prompt).await?;
+    generate_and_render(cfg(&a), opt(&a), &r).await?;
     Ok(())
 }
-
-fn build_config_from_args(args: &Args) -> Config {
-    let mut cfg = config::load_config_or_default();
-    if let Some(provider) = &args.provider {
-        cfg.provider = provider.clone();
+fn load(p: &str) -> anyhow::Result<String> {
+    if Path::new(p).is_file() {
+        std::fs::read_to_string(p).with_context(|| format!("Failed to read prompt file: {p}"))
+    } else {
+        Ok(p.to_string())
     }
-    if let Some(model) = &args.model {
-        cfg.model = model.clone();
-    }
-    if let Some(key) = &args.api_key {
-        cfg.api_key = Some(key.clone());
-    }
-    cfg.output_file = args.output_file.clone();
-    cfg
 }
-
-fn pipeline_options(args: &Args) -> PipelineRunOptions {
+fn cfg(a: &Args) -> Config {
+    let mut c = config::load_config_or_default();
+    if let Some(p) = &a.provider {
+        c.provider = p.clone();
+    }
+    if let Some(m) = &a.model {
+        c.model = m.clone();
+    }
+    if let Some(k) = &a.api_key {
+        c.api_key = Some(k.clone());
+    }
+    c.output_file = a.output_file.clone();
+    c
+}
+fn opt(a: &Args) -> PipelineRunOptions {
     PipelineRunOptions {
-        iterations_override: resolve_iterations(args),
-        max_tokens: args.max_tokens,
-        temperature: args.temperature,
+        iterations_override: a
+            .iterations
+            .or(if a.auto_difficulty { None } else { Some(1) }),
+        max_tokens: a.max_tokens,
+        temperature: a.temperature,
     }
-}
-
-fn resolve_iterations(args: &Args) -> Option<u32> {
-    args.iterations
-        .or(if args.auto_difficulty { None } else { Some(1) })
 }
