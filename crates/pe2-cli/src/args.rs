@@ -13,52 +13,38 @@ Examples:
   pe2 -o output.md \"Save to file\"";
 
 #[derive(Parser, Debug)]
-#[command(
-    name = "pe2",
-    version = env!("CARGO_PKG_VERSION"),
-    about = "Convert raw prompts to PE²-structured optimized prompts",
-    long_about = LONG_HELP
-)]
+#[command(name = "pe2", version = env!("CARGO_PKG_VERSION"), about = "Convert raw prompts to PE²-structured optimized prompts", long_about = LONG_HELP)]
 pub struct Args {
     #[arg(help = "Raw prompt text or path to prompt file (omit for interactive mode)")]
     pub prompt: Option<String>,
-
     #[arg(long, help = "Open interactive REPL (same as omitting prompt)")]
     pub config: bool,
-
     #[arg(
         long,
         short = 'p',
         help = "LLM provider (openai, anthropic, google, openrouter, ollama)"
     )]
     pub provider: Option<String>,
-
     #[arg(long, short = 'm', help = "Model identifier for the selected provider")]
     pub model: Option<String>,
-
     #[arg(long, help = "API key for the provider")]
     pub api_key: Option<String>,
-
     #[arg(long, short = 'o', help = "Output file path")]
     pub output_file: Option<String>,
-
     #[arg(
         long,
         short = 'i',
         help = "Number of refinement iterations (overrides auto-detection)"
     )]
     pub iterations: Option<u32>,
-
     #[arg(
         long,
         default_value_t = true,
         help = "Enable auto-difficulty detection"
     )]
     pub auto_difficulty: bool,
-
     #[arg(long, default_value_t = LLM_MAX_TOKENS, help = "Max tokens for LLM response")]
     pub max_tokens: u32,
-
     #[arg(long, default_value_t = LLM_TEMPERATURE, help = "Temperature for LLM sampling")]
     pub temperature: f64,
 }

@@ -8,29 +8,26 @@ const BANNER_LINES: &[&str] = &[
     " | |     __/ |___) |_\\ \\ | | | || |____ | |_ ",
     " |_|    |___/____/\\__\\/  \\_| |_/\\_____/ \\___/",
 ];
-
 pub const TAGLINE: &str = "Structured Prompt Generation v4 — KleoSr Pro Edition";
 
 pub fn print_banner() {
-    let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    let padded = format!("{:>60}", format!("[ {version} ]").bright_black());
-
-    for line in BANNER_LINES {
-        println!("  {}", line.bright_cyan());
+    let v = format!("v{}", env!("CARGO_PKG_VERSION"));
+    for l in BANNER_LINES {
+        println!("  {}", l.bright_cyan());
     }
-    println!();
-    println!("  {} {}", "|>".bright_green(), TAGLINE.bright_white());
-    println!("  {}", padded);
-    println!();
+    println!(
+        "\n  {} {}\n  {}\n",
+        "|>".bright_green(),
+        TAGLINE.bright_white(),
+        format!("{:>60}", format!("[ {v} ]").bright_black())
+    );
 }
-
 pub fn print_banner_brief() {
-    let version = env!("CARGO_PKG_VERSION");
     println!(
         "{} {} ({} {})",
         "|>".bright_green(),
         "PE2-CLI".bright_cyan(),
-        version.bright_white(),
+        env!("CARGO_PKG_VERSION").bright_white(),
         "— interactive mode".dimmed()
     );
 }

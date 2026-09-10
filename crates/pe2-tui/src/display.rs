@@ -6,67 +6,58 @@ use pe2_core::errors::CliError;
 
 const SPINNER_TEMPLATE: &str = "{spinner:.green} {msg}";
 
-pub fn print_complexity_analysis(analysis: &ComplexityResult) {
+macro_rules! row {
+    ($l:expr, $v:expr) => {
+        println!("  {} {}: {}", "◇".bright_blue(), $l.bright_blue(), $v);
+    };
+}
+pub fn print_complexity_analysis(a: &ComplexityResult) {
     println!();
-    println!(
-        "  {} {}: {} {} ({} iterations)",
-        "◇".bright_blue(),
-        "Difficulty".bright_blue(),
-        analysis.difficulty.emoji(),
-        analysis.difficulty.label().bold(),
-        analysis.iterations,
-    );
-    println!(
-        "  {} {}: {}",
-        "◇".bright_blue(),
-        "Complexity Score".bright_blue(),
+    row!(
+        "Difficulty",
         format!(
-            "{}/{}",
-            analysis.score,
-            pe2_core::constants::COMPLEXITY_SCORE_MAX
+            "{} {} ({} iterations)",
+            a.difficulty.emoji(),
+            a.difficulty.label().bold(),
+            a.iterations
         )
-        .white(),
     );
-    println!(
-        "  {} {}: {} words",
-        "◇".bright_blue(),
-        "Word Count".bright_blue(),
-        analysis.word_count.to_string().white(),
+    row!(
+        "Complexity Score",
+        format!("{}/{}", a.score, pe2_core::constants::COMPLEXITY_SCORE_MAX).white()
     );
+    row!("Word Count", format!("{} words", a.word_count).white());
     println!();
 }
-
-fn print_prompt_field(prefix: &str, label: &str, value: &str) {
-    println!("  {} {}", prefix, label.bright_blue());
-    for line in value.lines() {
-        println!("  {} {}", "│  ".dimmed(), line.white());
+fn field(pre: &str, l: &str, v: &str) {
+    println!("  {} {}", pre, l.bright_blue());
+    for x in v.lines() {
+        println!("  {} {}", "│  ".dimmed(), x.white());
     }
     println!();
 }
-
-pub fn print_prompt_result(prompt: &StructuredPrompt, output_file: &str) {
+pub fn print_prompt_result(p: &StructuredPrompt, f: &str) {
     println!();
     println!(
         "  {} {}",
         "┌".dimmed(),
         "Optimized Prompt".bright_white().bold()
     );
-    print_prompt_field("├─", "Context:", &prompt.context);
-    print_prompt_field("├─", "Role:", &prompt.role);
-    print_prompt_field("├─", "Task:", &prompt.task);
-    print_prompt_field("├─", "Constraints:", &prompt.constraints);
-    print_prompt_field("├─", "Output:", &prompt.output);
+    for (l, v) in [
+        ("Context:", &p.context),
+        ("Role:", &p.role),
+        ("Task:", &p.task),
+        ("Constraints:", &p.constraints),
+        ("Output:", &p.output),
+    ] {
+        field("├─", l, v);
+    }
     println!("  {} {}", "└─".dimmed(), "Saved to:".bright_blue());
-    println!(
-        "  {}   {}",
-        " ".dimmed(),
-        output_file.bright_cyan().underline()
-    );
+    println!("  {}   {}", " ".dimmed(), f.bright_cyan().underline());
     println!();
 }
-
-pub fn print_refinement_history(history: &[RefinementEntry]) {
-    if history.len() <= 1 {
+pub fn print_refinement_history(h: &[RefinementEntry]) {
+    if h.len() <= 1 {
         return;
     }
     println!(
@@ -74,68 +65,57 @@ pub fn print_refinement_history(history: &[RefinementEntry]) {
         "◆".bright_cyan(),
         "Refinement History".bright_white().bold()
     );
-    for entry in history {
-        let label = format!("Iteration {}", entry.iteration);
-        let short = entry.edits.chars().take(120).collect::<String>();
+    for e in h {
         println!(
             "  {} {} {} {}",
             " ".dimmed(),
-            label.bright_magenta(),
+            format!("Iteration {}", e.iteration).bright_magenta(),
             "·".dimmed(),
-            short.dimmed(),
+            e.edits.chars().take(120).collect::<String>().dimmed()
         );
     }
     println!();
 }
-
-pub fn print_metrics(analysis: &ComplexityResult, iterations: usize) {
+pub fn print_metrics(a: &ComplexityResult, n: usize) {
     use comfy_table::Table;
-    let mut table = Table::new();
-    table
-        .set_header(vec!["Metric".bold(), "Value".bold()])
-        .add_row(vec!["Difficulty", analysis.difficulty.as_str()])
-        .add_row(vec!["Complexity Score", &analysis.score.to_string()])
-        .add_row(vec!["Iterations", &iterations.to_string()]);
-
+    let mut t = Table::new();
+    t.set_header(vec!["Metric".bold(), "Value".bold()])
+        .add_row(vec!["Difficulty", a.difficulty.as_str()])
+        .add_row(vec!["Complexity Score", &a.score.to_string()])
+        .add_row(vec!["Iterations", &n.to_string()]);
     println!("  {}", "Run Metrics".bright_white().bold());
-    for line in table.to_string().lines() {
-        println!("  {} {}", " ".dimmed(), line.dimmed());
+    for l in t.to_string().lines() {
+        println!("  {} {}", " ".dimmed(), l.dimmed());
     }
     println!();
 }
-
-pub fn print_error(msg: &str) {
-    eprintln!("  ✖ {}", msg.bright_red());
+pub fn print_error(m: &str) {
+    eprintln!("  ✖ {}", m.bright_red());
 }
-
-pub fn print_success(msg: &str) {
-    println!("  ✔ {}", msg.bright_green());
+pub fn print_success(m: &str) {
+    println!("  ✔ {}", m.bright_green());
 }
-
-pub fn print_info(msg: &str) {
-    println!("  ℹ {}", msg.bright_cyan());
+pub fn print_info(m: &str) {
+    println!("  ℹ {}", m.bright_cyan());
 }
-
 pub fn print_separator() {
     println!("  {}", "─".repeat(60).dimmed());
 }
-
-pub fn create_spinner(msg: &str) -> Result<ProgressBar, CliError> {
-    let style = ProgressStyle::with_template(SPINNER_TEMPLATE)
+pub fn create_spinner(m: &str) -> Result<ProgressBar, CliError> {
+    let s = ProgressStyle::with_template(SPINNER_TEMPLATE)
         .map_err(|e| CliError::Runtime(e.to_string()))?
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏");
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(style);
-    pb.set_message(format!("  {}", msg));
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
-    Ok(pb)
+    let b = ProgressBar::new_spinner();
+    b.set_style(s);
+    b.set_message(format!("  {m}"));
+    b.enable_steady_tick(std::time::Duration::from_millis(80));
+    Ok(b)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use indicatif::ProgressStyle;
-
     #[test]
     fn spinner_template_is_valid() {
         assert!(ProgressStyle::with_template(SPINNER_TEMPLATE).is_ok());
