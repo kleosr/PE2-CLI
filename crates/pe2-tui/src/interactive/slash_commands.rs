@@ -7,153 +7,124 @@ use pe2_core::session::SessionStore;
 use pe2_core::stats::StatsTracker;
 use std::io::{self, Write};
 
-pub fn edit_config(config: &mut Config) -> Result<(), CliError> {
+fn rl() -> Result<String, CliError> {
+    let mut s = String::new();
+    io::stdin().read_line(&mut s)?;
+    Ok(s.trim().to_string())
+}
+fn ask(l: &str, c: &str) -> Result<Option<String>, CliError> {
+    print!("  {} [{}]: ", l.bright_white(), c.dimmed());
+    io::stdout().flush()?;
+    let v = rl()?;
+    Ok(if v.is_empty() { None } else { Some(v) })
+}
+fn head(ic: colored::ColoredString, t: &str) {
+    println!();
+    println!("  {} {}", ic, t.bright_white().bold());
+    println!();
+}
+pub fn edit_config(c: &mut Config) -> Result<(), CliError> {
     println!();
     print_info("Configuration (press Enter to keep current value):");
     print_separator();
-
-    if let Some(value) = read_line_with_default("Provider", &config.provider)? {
-        config.provider = value;
+    if let Some(v) = ask("Provider", &c.provider)? {
+        c.provider = v;
     }
-    if let Some(value) = read_line_with_default("Model", &config.model)? {
-        config.model = value;
+    if let Some(v) = ask("Model", &c.model)? {
+        c.model = v;
     }
-    edit_api_key_field(config)?;
-
-    config::save_config(config)?;
+    print_info(
+        "API key is kept for this session only (not written to config.json). Prefer env vars.",
+    );
+    let m = config::mask_api_key(c.api_key.as_deref());
+    print!("  {} [{}]: ", "API Key".bright_white(), m.dimmed());
+    io::stdout().flush()?;
+    let k = rl()?;
+    if !k.is_empty() {
+        c.api_key = Some(k);
+    }
+    config::save_config(c)?;
     print_success("Configuration saved!");
     println!();
     Ok(())
 }
-
-fn read_line_with_default(label: &str, current: &str) -> Result<Option<String>, CliError> {
-    print!("  {} [{}]: ", label.bright_white(), current.dimmed());
-    io::stdout().flush()?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    let value = input.trim();
-    if value.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(value.to_string()))
-    }
-}
-
-fn edit_api_key_field(config: &mut Config) -> Result<(), CliError> {
-    print_info(
-        "API key is kept for this session only (not written to config.json). Prefer env vars.",
-    );
-    let masked = config::mask_api_key(config.api_key.as_deref());
-    print!("  {} [{}]: ", "API Key".bright_white(), masked.dimmed());
-    io::stdout().flush()?;
-    let mut key = String::new();
-    io::stdin().read_line(&mut key)?;
-    if !key.trim().is_empty() {
-        config.api_key = Some(key.trim().to_string());
-    }
-    Ok(())
-}
-
-pub fn show_session(session_store: &SessionStore) {
-    let entries = &session_store.entries;
-    if entries.is_empty() {
+pub fn show_session(s: &SessionStore) {
+    if s.entries.is_empty() {
         println!("  {}", "No sessions recorded yet.".dimmed());
         return;
     }
-    println!();
-    println!(
-        "  {} {}",
-        "◆".bright_cyan(),
-        "Session History".bright_white().bold()
-    );
-    println!();
-    for (i, entry) in entries.iter().rev().take(10).enumerate() {
-        let preview: String = entry.prompt.chars().take(60).collect();
+    head("◆".bright_cyan(), "Session History");
+    for (i, e) in s.entries.iter().rev().take(10).enumerate() {
         println!(
             "  {} {}. {} {}",
             " ".dimmed(),
             (i + 1).to_string().bright_blue(),
-            preview.dimmed(),
-            format!("[{}]", entry.difficulty).dimmed(),
+            e.prompt.chars().take(60).collect::<String>().dimmed(),
+            format!("[{}]", e.difficulty).dimmed()
         );
     }
     println!();
 }
-
-pub fn show_preferences(preferences: &UserPreferences) {
-    println!();
-    println!(
-        "  {} {}",
-        "◆".bright_yellow(),
-        "Preferences".bright_white().bold()
-    );
-    println!();
+pub fn show_preferences(p: &UserPreferences) {
+    head("◆".bright_yellow(), "Preferences");
     println!(
         "  {} {}",
         "  Track Usage:".dimmed(),
-        format!("{}", preferences.track_usage()).bright_white()
+        format!("{}", p.track_usage()).bright_white()
     );
     println!();
 }
-
-pub fn show_stats(stats: &StatsTracker) {
-    let usage = stats.usage();
-    if usage.total_prompts == 0 {
+pub fn show_stats(s: &StatsTracker) {
+    let u = s.usage();
+    if u.total_prompts == 0 {
         println!("  {}", "No usage statistics yet.".dimmed());
         return;
     }
-    println!();
-    println!(
-        "  {} {}",
-        "◆".bright_green(),
-        "Usage Statistics".bright_white().bold()
-    );
-    println!();
+    head("◆".bright_green(), "Usage Statistics");
     println!(
         "  {} {} {}",
         "  Total prompts:".dimmed(),
         "·".dimmed(),
-        usage.total_prompts.to_string().bright_white()
+        u.total_prompts.to_string().bright_white()
     );
-    show_provider_breakdown(usage);
-    show_daily_breakdown(usage);
+    breakdown(
+        "  By provider:",
+        u.provider_usage
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
+        true,
+    );
+    breakdown(
+        "  By date:",
+        u.daily_usage.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+        false,
+    );
     println!();
 }
-
-fn show_provider_breakdown(usage: &pe2_core::stats::UsageStats) {
-    if usage.provider_usage.is_empty() {
+fn breakdown(t: &str, mut v: Vec<(String, u64)>, pv: bool) {
+    if v.is_empty() {
         return;
     }
     println!();
-    println!("  {}", "  By provider:".dimmed());
-    let mut providers: Vec<_> = usage.provider_usage.iter().collect();
-    providers.sort_by(|a, b| b.1.cmp(a.1));
-    for (provider, count) in providers.iter().take(10) {
+    println!("  {}", t.dimmed());
+    if pv {
+        v.sort_by(|a, b| b.1.cmp(&a.1));
+    } else {
+        v.sort_by(|a, b| b.0.cmp(&a.0));
+    }
+    for (k, n) in v.iter().take(10) {
+        let kk = if pv {
+            k.bright_cyan()
+        } else {
+            k.bright_white()
+        };
         println!(
             "  {} {} {} {}",
             " ".dimmed(),
-            provider.bright_cyan(),
+            kk,
             "·".dimmed(),
-            count.to_string().bright_white()
-        );
-    }
-}
-
-fn show_daily_breakdown(usage: &pe2_core::stats::UsageStats) {
-    if usage.daily_usage.is_empty() {
-        return;
-    }
-    println!();
-    println!("  {}", "  By date:".dimmed());
-    let mut dates: Vec<_> = usage.daily_usage.iter().collect();
-    dates.sort_by(|a, b| b.0.cmp(a.0));
-    for (date, count) in dates.iter().take(10) {
-        println!(
-            "  {} {} {} {}",
-            " ".dimmed(),
-            date.bright_white(),
-            "·".dimmed(),
-            count.to_string().bright_white()
+            n.to_string().bright_white()
         );
     }
 }
@@ -161,13 +132,10 @@ fn show_daily_breakdown(usage: &pe2_core::stats::UsageStats) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pe2_core::stats::StatsTracker;
     use tempfile::TempDir;
-
     #[test]
     fn show_stats_handles_empty_tracker() {
-        let dir = TempDir::new().unwrap();
-        let stats = StatsTracker::from_path(dir.path().join("stats.json"));
-        show_stats(&stats);
+        let d = TempDir::new().unwrap();
+        show_stats(&StatsTracker::from_path(d.path().join("stats.json")));
     }
 }
