@@ -21,26 +21,29 @@ pub enum CliError {
     #[error("{0}")]
     Other(String),
 }
+
 impl CliError {
     pub fn exit_code(&self) -> i32 {
         match self {
-            CliError::Validation(_) => 2,
-            CliError::Config(_) => 3,
-            CliError::Provider { .. } => 4,
-            CliError::Network(_) => 5,
-            CliError::Auth(_) => 6,
-            CliError::Runtime(_) => 7,
+            Self::Validation(_) => 2,
+            Self::Config(_) => 3,
+            Self::Provider { .. } => 4,
+            Self::Network(_) => 5,
+            Self::Auth(_) => 6,
+            Self::Runtime(_) => 7,
             _ => 1,
         }
     }
 }
+
 impl From<String> for CliError {
-    fn from(s: String) -> Self {
-        CliError::Other(s)
+    fn from(message: String) -> Self {
+        Self::Other(message)
     }
 }
+
 impl From<&str> for CliError {
-    fn from(s: &str) -> Self {
-        CliError::Other(s.to_string())
+    fn from(message: &str) -> Self {
+        Self::Other(message.to_string())
     }
 }

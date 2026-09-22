@@ -13,7 +13,12 @@ Examples:
   pe2 -o output.md \"Save to file\"";
 
 #[derive(Parser, Debug)]
-#[command(name = "pe2", version = env!("CARGO_PKG_VERSION"), about = "Convert raw prompts to PE²-structured optimized prompts", long_about = LONG_HELP)]
+#[command(
+    name = "pe2",
+    version = env!("CARGO_PKG_VERSION"),
+    about = "Convert raw prompts to PE²-structured optimized prompts",
+    long_about = LONG_HELP
+)]
 pub struct Args {
     #[arg(help = "Raw prompt text or path to prompt file (omit for interactive mode)")]
     pub prompt: Option<String>,
@@ -45,6 +50,10 @@ pub struct Args {
     pub auto_difficulty: bool,
     #[arg(long, default_value_t = LLM_MAX_TOKENS, help = "Max tokens for LLM response")]
     pub max_tokens: u32,
-    #[arg(long, default_value_t = LLM_TEMPERATURE, help = "Temperature for LLM sampling")]
+    #[arg(
+        long,
+        default_value_t = LLM_TEMPERATURE,
+        help = "Temperature for LLM sampling"
+    )]
     pub temperature: f64,
 }
