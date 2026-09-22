@@ -12,59 +12,67 @@ use std::path::Path;
 
 #[tokio::main]
 async fn main() {
-    let a = Args::parse();
-    if let Err(e) = run(a).await {
-        print_error(&format!("{e}"));
-        std::process::exit(exit_code(&e));
+    let args = Args::parse();
+    if let Err(error) = run(args).await {
+        print_error(&error.to_string());
+        std::process::exit(exit_code(&error));
     }
 }
-fn exit_code(e: &anyhow::Error) -> i32 {
-    e.downcast_ref::<CliError>()
-        .map(|c| c.exit_code())
+
+fn exit_code(error: &anyhow::Error) -> i32 {
+    error
+        .downcast_ref::<CliError>()
+        .map(CliError::exit_code)
         .unwrap_or(1)
 }
-async fn run(a: Args) -> anyhow::Result<()> {
+
+async fn run(args: Args) -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
         )
         .init();
-    if a.config || a.prompt.is_none() {
-        return setup_and_run_interactive(opt(&a)).await.map_err(Into::into);
+    if args.config || args.prompt.is_none() {
+        setup_and_run_interactive(run_options(&args)).await?;
+        return Ok(());
     }
-    let r = load(a.prompt.as_ref().unwrap())?;
+    let raw = load_prompt(args.prompt.as_deref().expect("prompt is set"))?;
     print_banner();
-    generate_and_render(cfg(&a), opt(&a), &r).await?;
+    generate_and_render(merged_config(&args), run_options(&args), &raw).await?;
     Ok(())
 }
-fn load(p: &str) -> anyhow::Result<String> {
-    if Path::new(p).is_file() {
-        std::fs::read_to_string(p).with_context(|| format!("Failed to read prompt file: {p}"))
+
+fn load_prompt(prompt: &str) -> anyhow::Result<String> {
+    if Path::new(prompt).is_file() {
+        std::fs::read_to_string(prompt)
+            .with_context(|| format!("Failed to read prompt file: {prompt}"))
     } else {
-        Ok(p.to_string())
+        Ok(prompt.to_string())
     }
 }
-fn cfg(a: &Args) -> Config {
-    let mut c = config::load_config_or_default();
-    if let Some(p) = &a.provider {
-        c.provider = p.clone();
+
+fn merged_config(args: &Args) -> Config {
+    let mut config = config::load_config_or_default();
+    if let Some(provider) = &args.provider {
+        config.provider = provider.clone();
     }
-    if let Some(m) = &a.model {
-        c.model = m.clone();
+    if let Some(model) = &args.model {
+        config.model = model.clone();
     }
-    if let Some(k) = &a.api_key {
-        c.api_key = Some(k.clone());
+    if let Some(key) = &args.api_key {
+        config.api_key = Some(key.clone());
     }
-    c.output_file = a.output_file.clone();
-    c
+    config.output_file = args.output_file.clone();
+    config
 }
-fn opt(a: &Args) -> PipelineRunOptions {
+
+fn run_options(args: &Args) -> PipelineRunOptions {
     PipelineRunOptions {
-        iterations_override: a
+        iterations_override: args
             .iterations
-            .or(if a.auto_difficulty { None } else { Some(1) }),
-        max_tokens: a.max_tokens,
-        temperature: a.temperature,
+            .or(if args.auto_difficulty { None } else { Some(1) }),
+        max_tokens: args.max_tokens,
+        temperature: args.temperature,
     }
 }

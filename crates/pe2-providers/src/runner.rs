@@ -5,22 +5,23 @@ use pe2_core::engine::{Pipeline, PipelineResult, PipelineRunOptions};
 use pe2_core::errors::CliError;
 
 pub async fn run_pipeline(
-    cfg: Config,
-    o: PipelineRunOptions,
-    p: &str,
+    config: Config,
+    options: PipelineRunOptions,
+    prompt: &str,
 ) -> Result<PipelineResult, CliError> {
-    let k: ProviderKind = cfg.provider.parse()?;
-    let mut c = ProviderConfig::new(
-        k,
-        config::resolve_api_key(&cfg.provider, cfg.api_key.as_deref()),
+    let kind: ProviderKind = config.provider.parse()?;
+    let mut provider = ProviderConfig::new(
+        kind,
+        config::resolve_api_key(&config.provider, config.api_key.as_deref()),
     );
-    if k == ProviderKind::Ollama {
-        if let Ok(u) = std::env::var(constants::provider_env_var("ollama")) {
-            if !u.trim().is_empty() {
-                c = c.with_base_url(u);
+    if kind == ProviderKind::Ollama {
+        if let Ok(url) = std::env::var(constants::provider_env_var("ollama")) {
+            if !url.trim().is_empty() {
+                provider = provider.with_base_url(url);
             }
         }
     }
-    let mut x = Pipeline::with_options(create_client(&c)?, cfg, o);
-    x.run(p).await
+    Pipeline::with_options(create_client(&provider)?, config, options)
+        .run(prompt)
+        .await
 }

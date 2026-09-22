@@ -1,4 +1,4 @@
-use crate::client::{ProviderConfig, ProviderKind};
+use crate::client::{default_base, ProviderConfig, ProviderKind};
 use crate::http::{
     build_http_client, check_success, need_key, post_json, ptr, validate_base_url,
     validate_model_id,
@@ -10,142 +10,192 @@ use pe2_core::errors::CliError;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFERER};
 
 pub struct Client {
-    k: ProviderKind,
-    c: reqwest::Client,
+    kind: ProviderKind,
+    http: reqwest::Client,
     key: String,
     base: String,
 }
+
 impl Client {
-    pub fn new(cfg: &ProviderConfig) -> Result<Self, CliError> {
-        let base = cfg.base_url.clone().unwrap_or_else(|| match cfg.kind {
-            ProviderKind::OpenAI => "https://api.openai.com/v1".to_string(),
-            ProviderKind::Ollama => "http://localhost:11434".to_string(),
-            _ => String::new(),
-        });
-        if matches!(cfg.kind, ProviderKind::OpenAI | ProviderKind::Ollama) {
+    pub fn new(config: &ProviderConfig) -> Result<Self, CliError> {
+        let base = config
+            .base_url
+            .clone()
+            .unwrap_or_else(|| default_base(config.kind));
+        if matches!(config.kind, ProviderKind::OpenAI | ProviderKind::Ollama) {
             validate_base_url(&base)?;
         }
-        let name = match cfg.kind {
-            ProviderKind::OpenAI => "OpenAI",
-            ProviderKind::Anthropic => "Anthropic",
-            ProviderKind::Google => "Google",
-            ProviderKind::OpenRouter => "OpenRouter",
-            ProviderKind::Ollama => "Ollama",
-        };
-        let key = if cfg.kind == ProviderKind::Ollama {
+        let key = if config.kind == ProviderKind::Ollama {
             String::new()
         } else {
-            need_key(&cfg.api_key, name)?.to_string()
+            need_key(&config.api_key, config.kind.label())?.to_string()
         };
         Ok(Self {
-            k: cfg.kind,
-            c: build_http_client()?,
+            kind: config.kind,
+            http: build_http_client()?,
             key,
             base,
         })
     }
-    fn req(
+
+    fn request(
         &self,
-        m: &str,
-        ms: &[Message],
-        o: &ChatOptions,
+        model: &str,
+        messages: &[Message],
+        options: &ChatOptions,
     ) -> Result<(String, serde_json::Value, &'static str), CliError> {
-        match self.k {
+        match self.kind {
             ProviderKind::OpenAI => Ok((
                 format!("{}/chat/completions", self.base),
-                oj(m, ms, o),
+                openai_body(model, messages, options),
                 "/choices/0/message/content",
             )),
             ProviderKind::OpenRouter => Ok((
                 "https://openrouter.ai/api/v1/chat/completions".to_string(),
-                oj(m, ms, o),
+                openai_body(model, messages, options),
                 "/choices/0/message/content",
             )),
             ProviderKind::Anthropic => Ok((
                 "https://api.anthropic.com/v1/messages".to_string(),
-                ab(m, ms, o),
+                anthropic_body(model, messages, options),
                 "/content/0/text",
             )),
             ProviderKind::Google => {
-                validate_model_id(m)?;
-                let t = ms
-                    .iter()
-                    .map(|x| format!("{}: {}", x.role, x.content))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let b = serde_json::json!({"contents": [{"parts": [{"text": t}]}], "generationConfig": {"temperature": o.temperature, "maxOutputTokens": o.max_tokens}});
-                Ok((format!("https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"), b, "/candidates/0/content/parts/0/text"))
+                validate_model_id(model)?;
+                Ok((
+                    format!(
+                        "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                    ),
+                    google_body(messages, options),
+                    "/candidates/0/content/parts/0/text",
+                ))
             }
-            ProviderKind::Ollama => {
-                let mut b = serde_json::json!({"model": m, "messages": ms, "stream": false});
-                if o.max_tokens > 0 {
-                    b["options"] = serde_json::json!({"num_predict": o.max_tokens, "temperature": o.temperature});
-                }
-                Ok((format!("{}/api/chat", self.base), b, "/message/content"))
-            }
+            ProviderKind::Ollama => Ok((
+                format!("{}/api/chat", self.base),
+                ollama_body(model, messages, options),
+                "/message/content",
+            )),
         }
     }
 }
-fn oj(m: &str, ms: &[Message], o: &ChatOptions) -> serde_json::Value {
-    serde_json::json!({"model": m, "messages": ms, "max_tokens": o.max_tokens, "temperature": o.temperature})
+
+fn openai_body(model: &str, messages: &[Message], options: &ChatOptions) -> serde_json::Value {
+    serde_json::json!({
+        "model": model,
+        "messages": messages,
+        "max_tokens": options.max_tokens,
+        "temperature": options.temperature
+    })
 }
-fn ab(m: &str, ms: &[Message], o: &ChatOptions) -> serde_json::Value {
-    let mut sys = None;
-    let mut v = Vec::new();
-    for x in ms {
-        if x.role == "system" {
-            sys = Some(x.content.clone());
+
+fn anthropic_body(model: &str, messages: &[Message], options: &ChatOptions) -> serde_json::Value {
+    let mut system = None;
+    let mut turns = Vec::new();
+    for message in messages {
+        if message.role == "system" {
+            system = Some(message.content.clone());
         } else {
-            v.push(serde_json::json!({"role": x.role, "content": x.content}));
+            turns.push(serde_json::json!({"role": message.role, "content": message.content}));
         }
     }
-    let mut b = serde_json::json!({"model": m, "messages": v, "max_tokens": o.max_tokens, "temperature": o.temperature});
-    if let Some(s) = sys {
-        b["system"] = serde_json::Value::String(s);
+    let mut body = serde_json::json!({
+        "model": model,
+        "messages": turns,
+        "max_tokens": options.max_tokens,
+        "temperature": options.temperature
+    });
+    if let Some(system) = system {
+        body["system"] = serde_json::Value::String(system);
     }
-    b
+    body
 }
-fn hv(s: &str) -> Result<HeaderValue, CliError> {
-    HeaderValue::from_str(s).map_err(|_| CliError::Auth("Invalid API key format".to_string()))
+
+fn google_body(messages: &[Message], options: &ChatOptions) -> serde_json::Value {
+    let text = messages
+        .iter()
+        .map(|message| format!("{}: {}", message.role, message.content))
+        .collect::<Vec<_>>()
+        .join("\n");
+    serde_json::json!({
+        "contents": [{"parts": [{"text": text}]}],
+        "generationConfig": {
+            "temperature": options.temperature,
+            "maxOutputTokens": options.max_tokens
+        }
+    })
 }
-fn js(h: &mut HeaderMap) {
-    h.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+fn ollama_body(model: &str, messages: &[Message], options: &ChatOptions) -> serde_json::Value {
+    let mut body = serde_json::json!({
+        "model": model,
+        "messages": messages,
+        "stream": false
+    });
+    if options.max_tokens > 0 {
+        body["options"] = serde_json::json!({
+            "num_predict": options.max_tokens,
+            "temperature": options.temperature
+        });
+    }
+    body
 }
-pub fn headers(k: ProviderKind, key: &str) -> Result<HeaderMap, CliError> {
-    let mut h = HeaderMap::new();
-    match k {
+
+fn header_value(value: &str) -> Result<HeaderValue, CliError> {
+    HeaderValue::from_str(value).map_err(|_| CliError::Auth("Invalid API key format".to_string()))
+}
+
+fn json_content(headers: &mut HeaderMap) {
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+}
+
+pub fn headers(kind: ProviderKind, key: &str) -> Result<HeaderMap, CliError> {
+    let mut headers = HeaderMap::new();
+    match kind {
         ProviderKind::Anthropic => {
-            h.insert(
+            headers.insert(
                 "x-api-key",
-                hv(key)
+                header_value(key)
                     .map_err(|_| CliError::Auth("Invalid Anthropic API key format".to_string()))?,
             );
-            h.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
-            js(&mut h);
+            headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+            json_content(&mut headers);
         }
         ProviderKind::Google => {
-            h.insert("x-goog-api-key", hv(key)?);
-            js(&mut h);
+            headers.insert("x-goog-api-key", header_value(key)?);
+            json_content(&mut headers);
         }
         ProviderKind::Ollama => {}
-        _ => {
-            h.insert(AUTHORIZATION, hv(&format!("Bearer {key}"))?);
-            js(&mut h);
-            if k == ProviderKind::OpenRouter {
-                h.insert(REFERER, HeaderValue::from_static(constants::HTTP_REFERER));
-                h.insert("X-Title", HeaderValue::from_static(constants::HTTP_TITLE));
+        ProviderKind::OpenAI | ProviderKind::OpenRouter => {
+            headers.insert(AUTHORIZATION, header_value(&format!("Bearer {key}"))?);
+            json_content(&mut headers);
+            if kind == ProviderKind::OpenRouter {
+                headers.insert(REFERER, HeaderValue::from_static(constants::HTTP_REFERER));
+                headers.insert("X-Title", HeaderValue::from_static(constants::HTTP_TITLE));
             }
         }
     }
-    Ok(h)
+    Ok(headers)
 }
+
 #[async_trait]
 impl EngineLlmProvider for Client {
-    async fn chat(&self, m: &str, ms: &[Message], o: &ChatOptions) -> Result<String, CliError> {
-        let p = self.k.as_str();
-        let (u, b, e) = self.req(m, ms, o)?;
-        let (s, j) = post_json(&self.c, &u, headers(self.k, &self.key)?, &b, p).await?;
-        check_success(s, &j, p)?;
-        ptr(&j, e, p)
+    async fn chat(
+        &self,
+        model: &str,
+        messages: &[Message],
+        options: &ChatOptions,
+    ) -> Result<String, CliError> {
+        let provider = self.kind.as_str();
+        let (url, body, pointer) = self.request(model, messages, options)?;
+        let (status, json) = post_json(
+            &self.http,
+            &url,
+            headers(self.kind, &self.key)?,
+            &body,
+            provider,
+        )
+        .await?;
+        check_success(status, &json, provider)?;
+        ptr(&json, pointer, provider)
     }
 }

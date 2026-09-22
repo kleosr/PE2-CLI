@@ -2,26 +2,28 @@ use super::InteractiveSession;
 use crate::display::print_error;
 use crate::prompt_flow::generate_and_render;
 use pe2_core::errors::CliError;
+use pe2_core::session::SessionEntry;
 use pe2_core::validation;
 
-pub async fn run_prompt_input(s: &mut InteractiveSession, r: &str) -> Result<(), CliError> {
-    if let Some(m) = validation::validate_prompt(r) {
-        print_error(&m);
+pub async fn run_prompt_input(session: &mut InteractiveSession, raw: &str) -> Result<(), CliError> {
+    if let Some(message) = validation::validate_prompt(raw) {
+        print_error(&message);
         return Ok(());
     }
-    let x = generate_and_render(s.config.clone(), s.pipeline_options, r).await?;
-    s.session_store.add_entry(pe2_core::session::SessionEntry {
-        prompt: r.to_string(),
-        output: x.output_file.clone(),
-        model: s.config.model.clone(),
-        provider: s.config.provider.clone(),
-        difficulty: x.analysis.difficulty.label().to_string(),
-        score: x.analysis.score,
+    let result = generate_and_render(session.config.clone(), session.pipeline_options, raw).await?;
+    session.session_store.add_entry(SessionEntry {
+        prompt: raw.to_string(),
+        output: result.output_file.clone(),
+        model: session.config.model.clone(),
+        provider: session.config.provider.clone(),
+        difficulty: result.analysis.difficulty.label().to_string(),
+        score: result.analysis.score,
         timestamp: chrono::Utc::now().to_rfc3339(),
     });
-    if s.preferences.track_usage() {
-        s.stats
-            .record_usage(&s.config.provider, Some(x.analysis.score));
+    if session.preferences.track_usage() {
+        session
+            .stats
+            .record_usage(&session.config.provider, Some(result.analysis.score));
     }
     Ok(())
 }

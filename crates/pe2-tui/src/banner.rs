@@ -8,20 +8,23 @@ const BANNER_LINES: &[&str] = &[
     " | |     __/ |___) |_\\ \\ | | | || |____ | |_ ",
     " |_|    |___/____/\\__\\/  \\_| |_/\\_____/ \\___/",
 ];
+
 pub const TAGLINE: &str = "Structured Prompt Generation v4 — KleoSr Pro Edition";
 
 pub fn print_banner() {
-    let v = format!("v{}", env!("CARGO_PKG_VERSION"));
-    for l in BANNER_LINES {
-        println!("  {}", l.bright_cyan());
+    let version = env!("CARGO_PKG_VERSION");
+    let badge = format!("[ v{version} ]").bright_black();
+    for line in BANNER_LINES {
+        println!("  {}", line.bright_cyan());
     }
     println!(
-        "\n  {} {}\n  {}\n",
+        "\n  {} {}\n  {:>60}\n",
         "|>".bright_green(),
         TAGLINE.bright_white(),
-        format!("{:>60}", format!("[ {v} ]").bright_black())
+        badge
     );
 }
+
 pub fn print_banner_brief() {
     println!(
         "{} {} ({} {})",
