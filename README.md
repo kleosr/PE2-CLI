@@ -25,7 +25,7 @@ cargo build --release -p pe2-cli
 From the git repo (the workspace crate that contains the binary is `pe2-cli`):
 
 ```bash
-cargo install --git https://github.com/kleosr/PE2-CLI pe2-cli
+cargo install --git https://github.com/kleosr/formwork pe2-cli
 ```
 
 Tag `v*` and [`.github/workflows/publish.yml`](.github/workflows/publish.yml) builds release tarballs for Linux, macOS, and Windows, x64 and arm64.
